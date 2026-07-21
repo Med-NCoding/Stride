@@ -1,0 +1,508 @@
+import Foundation
+
+// MARK: - User Model
+//
+// This is the canonical user record used everywhere in the app.
+// Fields match what will eventually be stored in the Supabase `profiles` table.
+// Optional fields may be nil until the user completes the relevant onboarding step.
+
+struct User: Identifiable, Codable {
+
+    // ── Identity ──────────────────────────────────────────────────────────
+
+    /// Primary key. Matches the UUID Supabase assigns on auth sign-up.
+    let id: UUID
+
+    /// Unique handle chosen during onboarding (e.g. "sprint_king").
+    /// Lowercase, no spaces. Used in leaderboards and challenge invites.
+    let username: String
+
+    /// Free-form name shown in the UI header (e.g. "Medhansh").
+    /// Optional — a user who skips this falls back to `username`.
+    let displayName: String?
+
+    // ── Profile image ──────────────────────────────────────────────────────
+
+    /// Remote URL string pointing to the user's profile picture.
+    /// Nil until the user uploads a photo. UI falls back to initials avatar.
+    let avatarUrl: String?
+
+    // ── Game economy ───────────────────────────────────────────────────────
+
+    /// Current virtual currency balance earned from steps and won challenges.
+    let strideBalance: Int
+
+    // ── Step tracking (retained from original schema) ─────────────────────
+
+    /// Cumulative lifetime step count — all-time personal record.
+    let allTimeSteps: Int
+
+    // ── State flags ────────────────────────────────────────────────────────
+
+    /// True once the user completes the full onboarding flow (username + Health).
+    let onboardingComplete: Bool
+
+    // ── Timestamps ────────────────────────────────────────────────────────
+
+    /// UTC timestamp of when the account was first created.
+    let createdAt: Date
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - League Models
+//
+// Three related types model the full lifecycle of a league:
+//
+//   League           – the league itself (who created it, its invite code, etc.)
+//   LeagueMemberRole – the role a specific user holds inside one league
+//   LeagueMember     – the join record linking a User to a League, including
+//                      their in-league step total and currency earned
+//   LeagueStepSnapshot – one weekly verified-step tally per member, used for
+//                        leaderboard rankings and history charts
+//
+// These mirror the four Supabase tables that will be created:
+//   leagues / league_members / league_step_snapshots
+// ─────────────────────────────────────────────────────────────────────────────
+
+// MARK: LeagueMemberRole
+//
+// Determines what a user can do inside the league.
+//   admin  → created the league; can rename it, set the invite code, kick members
+//   member → joined via invite; can view and compete but cannot modify league settings
+
+enum LeagueMemberRole: String, Codable, CaseIterable {
+    case admin   = "admin"    // The user who created the league
+    case member  = "member"   // Any user who joined via invite code
+}
+
+// MARK: LeagueMember
+//
+// Join-record between a User and a League.
+// Stored in the `league_members` Supabase table.
+// Every row = one person in one league.
+//
+// In-league step and currency totals are stored here (not on the User record)
+// so the same user can have different stats across different leagues.
+
+struct LeagueMember: Identifiable, Codable {
+
+    // ── Identity ──────────────────────────────────────────────────────────
+
+    /// Unique row ID for this membership record.
+    let id: UUID
+
+    /// The league this member belongs to.
+    let leagueId: UUID
+
+    /// The user who holds this membership.
+    let userId: UUID
+
+    // ── Role ──────────────────────────────────────────────────────────────
+
+    /// Whether this user administrates the league or is a regular member.
+    /// Set to `.admin` when the user creates the league; `.member` on join.
+    let role: LeagueMemberRole
+
+    // ── In-League Stats ───────────────────────────────────────────────────
+    // These are scoped to this league only — not global lifetime totals.
+    // They are updated whenever a new verified step batch is imported.
+
+    /// Total verified steps this user has walked since joining this league.
+    var verifiedStepsInLeague: Int
+
+    /// Total Stride currency this user has earned within this league
+    /// (steps converted to currency via AppConfig.stepsPerCurrencyUnit).
+    var currencyEarnedInLeague: Int
+
+    // ── Timestamps ────────────────────────────────────────────────────────
+
+    /// The exact date/time this user joined (or created) the league.
+    let joinedAt: Date
+}
+
+// MARK: League
+//
+// The league entity itself.
+// Stored in the `leagues` Supabase table.
+// One row = one league group.
+
+struct League: Identifiable, Codable {
+
+    // ── Identity ──────────────────────────────────────────────────────────
+
+    /// Primary key. Generated by Supabase on insert.
+    let id: UUID
+
+    /// Human-readable name chosen by the admin (e.g. "Neighborhood Walkers").
+    let name: String
+
+    /// Optional description shown on the league detail screen.
+    let description: String?
+
+    // ── Membership control ────────────────────────────────────────────────
+
+    /// Short alphanumeric code that other users enter to join (e.g. "WALK42").
+    /// Generated server-side on creation to avoid collisions.
+    let inviteCode: String
+
+    /// UUID of the User who created this league (their role = .admin).
+    let createdBy: UUID
+
+    /// Maximum number of members allowed. Nil = unlimited.
+    let memberCap: Int?
+
+    // ── Timestamps ────────────────────────────────────────────────────────
+
+    /// UTC timestamp of league creation.
+    let createdAt: Date
+}
+
+// MARK: LeagueStepSnapshot
+//
+// A weekly verified-step tally for one member of one league.
+// Stored in the `league_step_snapshots` Supabase table.
+//
+// Why a separate snapshot table instead of just reading StepRecord directly?
+//   • Step records come from HealthKit and can be noisy / amended.
+//   • Snapshots represent the *verified* total for a given league week.
+//   • Leaderboards and charts read from snapshots, not raw step records,
+//     so results are stable and fast to query.
+
+struct LeagueStepSnapshot: Identifiable, Codable {
+
+    // ── Identity ──────────────────────────────────────────────────────────
+
+    /// Row ID.
+    let id: UUID
+
+    /// The league this snapshot belongs to.
+    let leagueId: UUID
+
+    /// The member (user) this snapshot is for.
+    let userId: UUID
+
+    // ── Period ────────────────────────────────────────────────────────────
+
+    /// The Monday that starts the week this snapshot covers (ISO week start).
+    let weekStartDate: Date
+
+    /// The Sunday that ends the week this snapshot covers.
+    let weekEndDate: Date
+
+    // ── Verified Totals ───────────────────────────────────────────────────
+
+    /// Verified step count for this member in this league week.
+    /// "Verified" means imported from HealthKit and confirmed by the server.
+    let verifiedSteps: Int
+
+    /// Currency converted from verifiedSteps for this week
+    /// (verifiedSteps / AppConfig.stepsPerCurrencyUnit, floored to Int).
+    let currencyEarned: Int
+
+    // ── Timestamps ────────────────────────────────────────────────────────
+
+    /// When this snapshot was last calculated / written.
+    let calculatedAt: Date
+}
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - Challenge & Betting Models
+//
+// Four types model the full challenge and virtual-betting lifecycle:
+//
+//   ChallengeType   – what kind of contest it is (head-to-head steps vs goal)
+//   ChallengeStatus – where the challenge is in its lifecycle
+//   Challenge       – the core contest record between two users
+//   Stake           – a third-party virtual bet placed ON an existing challenge
+//   Prediction      – legacy alias kept for backward compatibility
+//   StepRecord      – a raw HealthKit import for one user on one day
+//   CurrencyTransaction – ledger entry every time currency moves
+//
+// Supabase tables:  challenges / stakes / step_records / currency_transactions
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// MARK: ChallengeType
+//
+// Defines the win condition of the challenge.
+//   headToHead  → whoever walks MORE steps in the window wins
+//   goalRace    → first person to reach a target step count wins
+//   endurance   → whoever sustains the highest daily average over the window wins
+
+enum ChallengeType: String, Codable, CaseIterable {
+    case headToHead = "head_to_head"  // Beat opponent's total step count
+    case goalRace   = "goal_race"     // First to reach a fixed step goal
+    case endurance  = "endurance"     // Highest daily average over the window
+}
+
+// MARK: ChallengeStatus
+//
+// Lifecycle state machine for a challenge.
+//
+//   invited   → challenger has sent the request; waiting for opponent to accept
+//   active    → both parties accepted; steps are being tracked
+//   completed → window has ended; winner calculated
+//   cancelled → declined or cancelled before going active
+//   disputed  → completed but result is under manual review
+
+enum ChallengeStatus: String, Codable, CaseIterable {
+    case invited   = "invited"    // Sent, waiting for acceptance
+    case active    = "active"     // Running — steps being counted
+    case completed = "completed"  // Finished — winner determined
+    case cancelled = "cancelled"  // Declined or withdrawn before start
+    case disputed  = "disputed"   // Result flagged for review
+}
+
+// MARK: Challenge
+//
+// The core contest record.
+// Stored in the `challenges` Supabase table.
+// One row = one 1-on-1 competition between two users.
+
+struct Challenge: Identifiable, Codable {
+
+    // ── Identity ──────────────────────────────────────────────────────────
+
+    /// Primary key.
+    let id: UUID
+
+    /// The user who initiated the challenge.
+    let challengerId: UUID
+
+    /// The user who was challenged.
+    let opponentId: UUID
+
+    /// Optional — challenge can be scoped to a specific league.
+    /// Nil means it is a direct 1-on-1 outside any league.
+    let leagueId: UUID?
+
+    // ── Contest Rules ─────────────────────────────────────────────────────
+
+    /// What kind of win condition this challenge uses.
+    let type: ChallengeType
+
+    /// Target step count used only when type == .goalRace.
+    /// Nil for headToHead and endurance challenges.
+    let stepGoal: Int?
+
+    /// Duration window in hours (e.g. 6, 24, 72, 168).
+    let durationHours: Int
+
+    // ── Virtual Stakes ────────────────────────────────────────────────────
+    // Both participants lock up their wager when the challenge goes active.
+    // The winner receives both wagers. If the challenge is cancelled the
+    // currency is refunded to each party.
+
+    /// Amount of Stride currency the challenger put up.
+    let challengerWager: Int
+
+    /// Amount of Stride currency the opponent put up.
+    /// May differ from challengerWager if asymmetric stakes are supported later.
+    let opponentWager: Int
+
+    /// Total virtual pot = challengerWager + opponentWager.
+    /// Stored for quick display; always derivable from the two fields above.
+    var totalPot: Int { challengerWager + opponentWager }
+
+    // ── Live Progress ─────────────────────────────────────────────────────
+    // Populated while the challenge is active; nil before start / after end.
+
+    /// Most recent verified step count for the challenger.
+    var challengerSteps: Int
+
+    /// Most recent verified step count for the opponent.
+    var opponentSteps: Int
+
+    // ── Outcome ───────────────────────────────────────────────────────────
+
+    /// Current lifecycle state.
+    var status: ChallengeStatus
+
+    /// UUID of the winner. Nil until status == .completed.
+    let winnerId: UUID?
+
+    /// The final verified step total for the challenger at challenge end.
+    let challengerFinalSteps: Int?
+
+    /// The final verified step total for the opponent at challenge end.
+    let opponentFinalSteps: Int?
+
+    // ── Timestamps ────────────────────────────────────────────────────────
+
+    /// When the challenge invite was sent.
+    let createdAt: Date
+
+    /// When the opponent accepted and step tracking began.
+    let startedAt: Date?
+
+    /// When the window closed (computed from startedAt + durationHours).
+    let endsAt: Date?
+}
+
+
+// MARK: Stake
+//
+// A virtual bet placed by a THIRD PARTY on an existing challenge.
+// Stored in the `stakes` Supabase table.
+//
+// This is the spectator-betting feature:
+//   • Anyone who can see the challenge can place a Stake.
+//   • They pick which participant they think will win.
+//   • If correct they receive their stake back plus a proportional payout
+//     from the pool of incorrect stakes (pari-mutuel style).
+//
+// Note: stakes are separate from the challenge wager. The wager is between
+// the two participants. Stakes are side-bets from the audience.
+
+struct Stake: Identifiable, Codable {
+
+    // ── Identity ──────────────────────────────────────────────────────────
+
+    /// Row ID.
+    let id: UUID
+
+    /// The challenge this stake is placed on.
+    let challengeId: UUID
+
+    /// The user placing this stake (must NOT be challenger or opponent).
+    let stakerId: UUID
+
+    // ── Bet Details ───────────────────────────────────────────────────────
+
+    /// UUID of the participant the staker is backing to win.
+    let predictedWinnerId: UUID
+
+    /// Amount of Stride currency locked into this stake.
+    let amountWagered: Int
+
+    // ── Outcome ───────────────────────────────────────────────────────────
+
+    /// True once the parent challenge reaches .completed and payouts are settled.
+    var isResolved: Bool
+
+    /// True if the staker's prediction was correct.
+    /// Nil until isResolved == true.
+    let won: Bool?
+
+    /// The payout amount received if won == true.
+    /// Nil until resolved. If won == false this is 0.
+    let payoutReceived: Int?
+
+    // ── Timestamps ────────────────────────────────────────────────────────
+
+    let placedAt: Date
+    let resolvedAt: Date?
+}
+
+
+// MARK: - Prediction (Legacy alias)
+//
+// Kept for backward compatibility with code written before Stake was introduced.
+// New code should use `Stake` directly.
+// Maps to the same `stakes` Supabase table via a server-side view.
+
+typealias Prediction = Stake
+
+
+// MARK: - Step Record
+//
+// A raw HealthKit step import for one user on one calendar day.
+// Stored in the `step_records` Supabase table.
+//
+// Step records are the source material for:
+//   • Updating Challenge.challengerSteps / opponentSteps in real time
+//   • Calculating LeagueStepSnapshot at the end of each week
+//   • Feeding the weekly bar chart on the Home screen
+
+struct StepRecord: Identifiable, Codable {
+
+    // ── Identity ──────────────────────────────────────────────────────────
+
+    let id: UUID
+
+    /// The user whose steps these are.
+    let userId: UUID
+
+    // ── Data ──────────────────────────────────────────────────────────────
+
+    /// The calendar day these steps occurred on (midnight UTC).
+    let date: Date
+
+    /// Raw step count for this day as read from HealthKit.
+    let stepCount: Int
+
+    /// Whether these steps have passed server-side verification.
+    /// Unverified steps are stored but excluded from leaderboards and wager payouts.
+    let isVerified: Bool
+
+    /// Source identifier — e.g. "com.apple.health", "com.apple.watch".
+    let source: String
+
+    // ── Timestamps ────────────────────────────────────────────────────────
+
+    /// When this record was imported from HealthKit.
+    let importedAt: Date
+}
+
+
+// MARK: - Currency Transaction
+//
+// An append-only ledger entry recording every time Stride currency moves.
+// Stored in the `currency_transactions` Supabase table.
+//
+// The user's current balance is always derived by summing their transactions,
+// but `User.strideBalance` caches the running total for fast reads.
+//
+// Transaction types and their sign conventions:
+//   earned   → +  Steps converted to currency
+//   staked   → -  Currency locked into a challenge wager or third-party stake
+//   won      → +  Payout received after winning a challenge or stake
+//   lost     → -  Currency forfeited after losing a challenge
+//   refunded → +  Currency returned if a challenge is cancelled
+//   purchased→ +  Future: currency bought via in-app purchase (not real money)
+
+enum CurrencyTransactionType: String, Codable, CaseIterable {
+    case earned    = "earned"     // Steps → currency conversion
+    case staked    = "staked"     // Locked into a wager or stake
+    case won       = "won"        // Payout from a won challenge or stake
+    case lost      = "lost"       // Forfeited from a lost challenge
+    case refunded  = "refunded"   // Returned on challenge cancellation
+    case purchased = "purchased"  // Reserved for future monetisation
+}
+
+struct CurrencyTransaction: Identifiable, Codable {
+
+    // ── Identity ──────────────────────────────────────────────────────────
+
+    let id: UUID
+
+    /// The user whose balance this transaction affects.
+    let userId: UUID
+
+    // ── Transaction ───────────────────────────────────────────────────────
+
+    /// The signed amount (positive = credit, negative = debit).
+    /// Always positive in the database; the sign is inferred from `type`.
+    let amount: Int
+
+    /// What caused this movement.
+    let type: CurrencyTransactionType
+
+    // ── Reference ─────────────────────────────────────────────────────────
+
+    /// Links back to the Challenge, Stake, or StepRecord that caused this entry.
+    /// Nil for manual or system-generated transactions.
+    let referenceId: UUID?
+
+    /// Human-readable description shown in the transaction history screen.
+    /// e.g. "Won challenge vs alice_walks", "Steps earned: 8,450 steps"
+    let note: String?
+
+    // ── Timestamps ────────────────────────────────────────────────────────
+
+    let createdAt: Date
+}
+

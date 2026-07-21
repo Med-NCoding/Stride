@@ -1,0 +1,19 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# User-specific
+*.xcuserstate
+*.xcuserdatad
+
+# Stride Credentials & Local Configuration
+Stride/Config.plist
