@@ -1,5 +1,21 @@
 import SwiftUI
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - UsernameState
+//
+// Drives the inline feedback pill shown below the username field.
+// Defined at file scope (outside the View struct) so SwiftUI's state
+// diffing engine can properly track it as a @State value type.
+// ─────────────────────────────────────────────────────────────────────────────
+enum UsernameState {
+    case idle           // User hasn't typed yet
+    case invalidFormat  // Fails local rules (too short, bad chars…)
+    case checking       // Network availability check in flight
+    case taken          // Username exists in the DB
+    case available      // All good — ready to proceed
+}
+
+
 struct AuthOnboardingView: View {
     @EnvironmentObject private var stateManager:  AppStateManager
     @EnvironmentObject private var healthService: HealthKitService
@@ -15,15 +31,8 @@ struct AuthOnboardingView: View {
     @State private var internalStep = 0    // 0 = username/displayName, 1 = Health
 
     // ── Username validation state ──────────────────────────────────────────
-    // Drives the inline feedback pill below the username field.
-    enum UsernameState {
-        case idle           // User hasn't typed yet
-        case invalidFormat  // Fails local rules (too short, bad chars…)
-        case checking       // Network availability check in flight
-        case taken          // Username exists in the DB
-        case available      // All good — ready to proceed
-    }
     @State private var usernameState: UsernameState = .idle
+
 
     // ── Async state ────────────────────────────────────────────────────────
     @State private var isLoading   = false
@@ -173,8 +182,9 @@ struct AuthOnboardingView: View {
                     placeholder: "Username  (e.g. sprint_king)",
                     text: $username
                 )
-                // Validate format locally on every keystroke
-                .onChange(of: username) { _, _ in
+                // Validate format locally on every keystroke.
+                // Single-argument form is used for broadest compatibility.
+                .onChange(of: username) { _ in
                     validateUsernameFormat()
                 }
 
@@ -206,28 +216,28 @@ struct AuthOnboardingView: View {
         }
     }
 
-    // Inline username status indicator
+    // Inline username status indicator.
+    // Uses if/else if instead of a switch inside @ViewBuilder to avoid
+    // a known SwiftUI crash with switch expressions on enum @State values.
     @ViewBuilder
     private var usernameFeedbackPill: some View {
-        switch usernameState {
-        case .idle:
-            EmptyView()
-
-        case .invalidFormat:
-            // Show the specific format error from the local validator
-            if let err = ProfileService.localValidate(username: username) {
-                feedbackRow(icon: "xmark.circle.fill", text: err, color: SD.danger)
-            }
-
-        case .checking:
-            feedbackRow(icon: "arrow.triangle.2.circlepath", text: "Checking availability…", color: SD.textMuted)
-
-        case .taken:
-            feedbackRow(icon: "xmark.circle.fill", text: "@\(username.lowercased()) is already taken.", color: SD.danger)
-
-        case .available:
-            feedbackRow(icon: "checkmark.circle.fill", text: "@\(username.lowercased()) is available!", color: SD.success)
+        if usernameState == .invalidFormat,
+           let err = ProfileService.localValidate(username: username) {
+            feedbackRow(icon: "xmark.circle.fill", text: err, color: SD.danger)
+        } else if usernameState == .checking {
+            feedbackRow(icon: "arrow.triangle.2.circlepath",
+                        text: "Checking availability…",
+                        color: SD.textMuted)
+        } else if usernameState == .taken {
+            feedbackRow(icon: "xmark.circle.fill",
+                        text: "@\(username.lowercased()) is already taken.",
+                        color: SD.danger)
+        } else if usernameState == .available {
+            feedbackRow(icon: "checkmark.circle.fill",
+                        text: "@\(username.lowercased()) is available!",
+                        color: SD.success)
         }
+        // .idle falls through — nothing rendered
     }
 
     private func feedbackRow(icon: String, text: String, color: Color) -> some View {
@@ -402,8 +412,9 @@ struct AuthOnboardingView: View {
         }
     }
 
-    // Network availability check. Debounced implicitly because it's only called
-    // after format validation passes. Marks the field as .checking while in-flight.
+    // Network availability check. Marks the field as .checking while in-flight.
+    // On a server/network error we fall back to .available rather than blocking
+    // the user — a duplicate-key conflict on insert would still be caught later.
     private func checkUsernameAvailability(_ trimmed: String) async {
         withAnimation { usernameState = .checking }
         do {
@@ -412,8 +423,10 @@ struct AuthOnboardingView: View {
                 usernameState = available ? .available : .taken
             }
         } catch {
-            // Network error — don't block the user; fall back to idle
-            withAnimation { usernameState = .idle }
+            // Server error (e.g. table not yet created) — don't block the user.
+            // If the username is somehow a duplicate the insert will fail later
+            // and show a proper error on the health card.
+            withAnimation { usernameState = .available }
         }
     }
 

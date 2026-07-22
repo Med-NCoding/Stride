@@ -163,6 +163,9 @@ struct WeeklyRecapView: View {
 
 struct WeeklyRecapView_Previews: PreviewProvider {
     static var previews: some View {
-        WeeklyRecapView().preferredColorScheme(.dark)
+        WeeklyRecapView()
+            .environmentObject(AppStateManager())
+            .environmentObject(HealthKitService())
+            .preferredColorScheme(.dark)
     }
 }

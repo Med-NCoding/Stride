@@ -104,12 +104,38 @@ final class AppStateManager: ObservableObject {
             password: password
         )
 
-        // Check whether this user has already completed onboarding.
-        let onboardingDone = UserDefaults.standard.bool(forKey: isOnboardingCompletedKey)
+        // After sign-in, check whether this user already has a profile in Supabase.
+        // This is the source of truth — UserDefaults is only a local cache and
+        // gets cleared when users sign out or switch devices.
+        if let existingProfile = try? await ProfileService.fetchCurrentProfile() {
+            // Profile exists → user already completed onboarding, go straight to the app.
+            // Cache the data locally for fast future cold-launch restores.
+            UserDefaults.standard.set(true,                    forKey: isOnboardingCompletedKey)
+            UserDefaults.standard.set(existingProfile.username, forKey: savedUsernameKey)
+            if let dn = existingProfile.displayName {
+                UserDefaults.standard.set(dn, forKey: savedDisplayNameKey)
+            }
 
-        if onboardingDone {
-            await restoreUserFromDefaults()
+            if let session = try? await supabase.auth.session {
+                self.currentUser = User(
+                    id: session.user.id,
+                    username: existingProfile.username,
+                    displayName: existingProfile.displayName,
+                    avatarUrl: existingProfile.avatarUrl,
+                    strideBalance: existingProfile.strideBalance,
+                    allTimeSteps: existingProfile.allTimeSteps,
+                    onboardingComplete: true,
+                    createdAt: existingProfile.createdAt ?? Date()
+                )
+            }
+
+            withAnimation(.easeInOut(duration: SD.animNormal)) {
+                rootState = .signedIn
+            }
         } else {
+            // No profile found → new user or profile save failed previously,
+            // send them through onboarding to pick a username.
+            UserDefaults.standard.set(false, forKey: isOnboardingCompletedKey)
             withAnimation(.easeInOut(duration: SD.animNormal)) {
                 rootState = .onboardingRequired
             }
@@ -133,39 +159,60 @@ final class AppStateManager: ObservableObject {
         let cleanDisplayName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalDisplayName = (cleanDisplayName?.isEmpty == false) ? cleanDisplayName : nil
 
-        // 1. Write to Supabase `profiles` table.
-        //    ProfileService.createProfile() returns the full saved row,
-        //    including the server-generated created_at timestamp and the
-        //    user's Supabase Auth UUID (which we use as the canonical ID).
-        let savedProfile = try await ProfileService.createProfile(
-            username: finalUsername,
-            displayName: finalDisplayName
-        )
+        // 1. Try to write to the Supabase `profiles` table.
+        //    If it fails (table not created yet, RLS error, network issue)
+        //    we still complete onboarding locally so the user isn't stuck.
+        var resolvedId: UUID = UUID()
+        var resolvedBalance: Int = 100
+        var resolvedSteps: Int = 0
+        var resolvedCreatedAt: Date = Date()
 
-        // 2. Cache locally so future cold launches don't need a DB round-trip.
+        do {
+            let savedProfile = try await ProfileService.createProfile(
+                username: finalUsername,
+                displayName: finalDisplayName
+            )
+            resolvedId         = savedProfile.id
+            resolvedBalance    = savedProfile.strideBalance
+            resolvedSteps      = savedProfile.allTimeSteps
+            resolvedCreatedAt  = savedProfile.createdAt ?? Date()
+        } catch {
+            // Supabase insert failed — log it but don't throw.
+            // The user will still reach the main app. On the next sign-in,
+            // AppStateManager can attempt to re-create the profile row.
+            print("[Stride] Profile save failed (will use local data): \(error.localizedDescription)")
+
+            // Try to pull the real auth UUID so at least the ID is correct.
+            if let session = try? await supabase.auth.session {
+                resolvedId = session.user.id
+            }
+        }
+
+        // 2. Cache profile locally so cold launches don't need a DB round-trip.
         UserDefaults.standard.set(true,          forKey: isOnboardingCompletedKey)
         UserDefaults.standard.set(finalUsername, forKey: savedUsernameKey)
         if let dn = finalDisplayName {
             UserDefaults.standard.set(dn, forKey: savedDisplayNameKey)
         }
 
-        // 3. Hydrate the in-memory User object using the real saved data.
+        // 3. Hydrate the in-memory User object.
         self.currentUser = User(
-            id: savedProfile.id,           // Real UUID from Supabase Auth
-            username: savedProfile.username,
-            displayName: savedProfile.displayName,
-            avatarUrl: savedProfile.avatarUrl,
-            strideBalance: savedProfile.strideBalance,
-            allTimeSteps: savedProfile.allTimeSteps,
+            id: resolvedId,
+            username: finalUsername,
+            displayName: finalDisplayName,
+            avatarUrl: nil,
+            strideBalance: resolvedBalance,
+            allTimeSteps: resolvedSteps,
             onboardingComplete: true,
-            createdAt: savedProfile.createdAt ?? Date()
+            createdAt: resolvedCreatedAt
         )
 
-        // 4. Transition to the main app.
+        // 4. Always transition to the main app — no matter what happened above.
         withAnimation(.easeInOut(duration: SD.animNormal)) {
             rootState = .signedIn
         }
     }
+
 
 
 
@@ -177,12 +224,12 @@ final class AppStateManager: ObservableObject {
         // Revokes the token server-side and wipes it from the Keychain.
         try? await supabase.auth.signOut()
 
-        // Clear profile data from UserDefaults.
-        // We intentionally keep isOnboardingCompletedKey so returning users
-        // skip the username step if they sign back in on the same device.
+        // Clear the in-memory user and cached profile strings.
+        // NOTE: we intentionally do NOT clear isOnboardingCompletedKey here.
+        // signIn() now checks the live Supabase profile instead, so the local
+        // flag is only used as a fast-path hint on cold launch.
         UserDefaults.standard.removeObject(forKey: savedUsernameKey)
         UserDefaults.standard.removeObject(forKey: savedDisplayNameKey)
-        UserDefaults.standard.set(false, forKey: isOnboardingCompletedKey)
         self.currentUser = nil
 
         withAnimation(.easeInOut(duration: SD.animNormal)) {

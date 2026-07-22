@@ -180,6 +180,9 @@ private struct DurationSelector: View {
 
 struct ChallengesView_Previews: PreviewProvider {
     static var previews: some View {
-        ChallengesView().preferredColorScheme(.dark)
+        ChallengesView()
+            .environmentObject(AppStateManager())
+            .environmentObject(HealthKitService())
+            .preferredColorScheme(.dark)
     }
 }

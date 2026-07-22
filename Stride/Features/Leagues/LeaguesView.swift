@@ -191,6 +191,9 @@ struct LeaguesView: View {
 
 struct LeaguesView_Previews: PreviewProvider {
     static var previews: some View {
-        LeaguesView().preferredColorScheme(.dark)
+        LeaguesView()
+            .environmentObject(AppStateManager())
+            .environmentObject(HealthKitService())
+            .preferredColorScheme(.dark)
     }
 }
