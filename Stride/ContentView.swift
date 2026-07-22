@@ -54,5 +54,6 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environmentObject(AppStateManager())
+        .environmentObject(HealthKitService())
         .preferredColorScheme(.dark)
 }
