@@ -123,4 +123,6 @@ struct AppLoadingView: View {
 
 #Preview {
     AppLoadingView()
+        .environmentObject(AppStateManager())
+        .environmentObject(HealthKitService())
 }
