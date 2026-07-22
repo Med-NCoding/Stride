@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct AuthOnboardingView: View {
-    @EnvironmentObject private var stateManager: AppStateManager
+    @EnvironmentObject private var stateManager:  AppStateManager
+    @EnvironmentObject private var healthService: HealthKitService
 
     // ── Auth fields ────────────────────────────────────────────────────────
     @State private var email       = ""
@@ -249,25 +250,68 @@ struct AuthOnboardingView: View {
 
     private var healthCard: some View {
         VStack(spacing: SD.md) {
+
+            // ── Header row ────────────────────────────────────────────────────
             HStack(spacing: SD.sm) {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(SD.health)
+                ZStack {
+                    Circle()
+                        .fill(SD.health.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(SD.health)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Apple Health")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(SD.textPrimary)
-                    Text("Read-only step count access.")
+                    Text(healthService.isAvailable
+                         ? "Read-only step count access."
+                         : "Not available on this device.")
                         .font(.system(size: 12))
                         .foregroundColor(SD.textMuted)
                 }
                 Spacer()
+                // Status badge
+                if healthService.status == .authorized {
+                    Label("Connected", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(SD.success)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(SD.success.opacity(0.12))
+                        .cornerRadius(SD.radiusFull)
+                } else if healthService.status == .denied {
+                    Label("Denied", systemImage: "xmark.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(SD.danger)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(SD.dangerDim)
+                        .cornerRadius(SD.radiusFull)
+                }
             }
             .padding(SD.sm)
             .background(SD.bgSurface)
             .cornerRadius(SD.radiusSm)
 
-            // Error shown here if the Supabase profile insert fails
+            // ── Denied state hint ────────────────────────────────────────────
+            if healthService.status == .denied {
+                HStack(spacing: SD.xs) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(SD.info)
+                    Text("To enable later: Settings → Privacy → Health → Stride.")
+                        .font(SFont.micro)
+                        .foregroundColor(SD.info)
+                }
+                .padding(SD.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(SD.info.opacity(0.10))
+                .cornerRadius(SD.radiusSm)
+            }
+
+            // ── Profile save error ───────────────────────────────────────────
             if let err = profileError {
                 HStack(spacing: SD.xs) {
                     Image(systemName: "exclamationmark.circle.fill")
@@ -284,7 +328,18 @@ struct AuthOnboardingView: View {
                 .transition(.opacity)
             }
 
-            PurpleButton("Connect & Start Walking") {
+            // ── Primary button ───────────────────────────────────────────────
+            // Label changes based on current health permission state:
+            //   Not determined → asks for permission first, then saves
+            //   Authorized     → just saves the profile
+            //   Denied         → saves anyway (steps will be 0 until user re-grants)
+            PurpleButton(
+                healthService.status == .authorized
+                    ? "Start Walking!"
+                    : healthService.status == .denied
+                        ? "Continue Without Health"
+                        : "Connect & Start Walking"
+            ) {
                 Task { await handleCompleteOnboarding() }
             }
             .disabled(isLoading)
@@ -296,7 +351,7 @@ struct AuthOnboardingView: View {
                 }
             }
 
-            Text("Step data is read-only and used solely to calculate virtual Stride currency.")
+            Text("Step data is read-only and never shared with third parties.")
                 .font(.system(size: 11))
                 .foregroundColor(SD.textMuted)
                 .multilineTextAlignment(.center)
@@ -374,12 +429,23 @@ struct AuthOnboardingView: View {
     // MARK: - Onboarding Completion Logic
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Called when user taps "Connect & Start Walking" on the health card.
-    // Calls AppStateManager.completeOnboarding which inserts into Supabase
-    // and transitions rootState → .signedIn.
+    // Called when user taps the button on the health card.
+    // Step 1: Request HealthKit permission (if not yet determined).
+    // Step 2: Save the profile to Supabase regardless of HK outcome
+    //         (denied users can still use leagues — steps will show 0).
     private func handleCompleteOnboarding() async {
         isLoading    = true
         profileError = nil
+
+        // 1. Ask for HealthKit permission only if not yet asked.
+        if healthService.status == .notDetermined && healthService.isAvailable {
+            _ = await healthService.requestAuthorization()
+            // Small delay so the permission sheet fully dismisses before
+            // we transition to the home screen.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+
+        // 2. Save the profile to Supabase.
         do {
             try await stateManager.completeOnboarding(
                 username: username,
@@ -494,6 +560,7 @@ struct AuthOnboardingView_Previews: PreviewProvider {
     static var previews: some View {
         AuthOnboardingView()
             .environmentObject(AppStateManager())
+            .environmentObject(HealthKitService())
             .preferredColorScheme(.dark)
     }
 }
