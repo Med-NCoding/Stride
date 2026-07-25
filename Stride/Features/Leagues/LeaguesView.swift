@@ -1,5 +1,24 @@
 import SwiftUI
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - Reference Photo Theme Palette & Components
+// ─────────────────────────────────────────────────────────────────────────────
+private struct ReferenceTheme {
+    static let bgTop = Color(red: 0.26, green: 0.34, blue: 0.38)
+    static let bgBottom = Color(red: 0.12, green: 0.16, blue: 0.20)
+    static let tealStart = Color(red: 0.22, green: 0.68, blue: 0.74)
+    static let tealEnd = Color(red: 0.12, green: 0.48, blue: 0.55)
+    static let tealGradient = LinearGradient(
+        colors: [tealStart, tealEnd],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+    static let glassCardBg = Color.black.opacity(0.32)
+    static let glassBorder = Color.white.opacity(0.18)
+    static let textPrimary = Color.white
+    static let textMuted = Color.white.opacity(0.65)
+}
+
 struct LeaguesView: View {
     @State private var selectedLeaderboard = 0 // 0 = GOAT steps, 1 = Tycoon wealth
     @State private var showCreateSheet = false
@@ -28,16 +47,36 @@ struct LeaguesView: View {
 
     var body: some View {
         ZStack {
-            SD.bgPrimary.ignoresSafeArea()
+            // Atmospheric background matching reference photo
+            LinearGradient(
+                colors: [ReferenceTheme.bgTop, ReferenceTheme.bgBottom],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // Ambient warm glow bokeh
+            Circle()
+                .fill(Color(red: 1.0, green: 0.62, blue: 0.30).opacity(0.35))
+                .frame(width: 240, height: 240)
+                .blur(radius: 50)
+                .offset(x: 110, y: -100)
+
+            // Secondary cool teal glow
+            Circle()
+                .fill(ReferenceTheme.tealStart.opacity(0.20))
+                .frame(width: 300, height: 300)
+                .blur(radius: 60)
+                .offset(x: -120, y: 180)
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: SD.lg) {
+                VStack(spacing: 20) {
                     headerSection
                     myLeaguesSection
                     leaderboardSection
                     Spacer(minLength: 100)
                 }
-                .padding(.horizontal, SD.md)
+                .padding(.horizontal, 20)
                 .padding(.top, 16)
             }
         }
@@ -51,28 +90,32 @@ struct LeaguesView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Leagues")
                     .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(SD.textPrimary)
+                    .foregroundColor(ReferenceTheme.textPrimary)
                 Text("Compete with friends")
                     .font(.system(size: 14))
-                    .foregroundColor(SD.textMuted)
+                    .foregroundColor(ReferenceTheme.textMuted)
             }
             Spacer()
-            HStack(spacing: SD.sm) {
+            HStack(spacing: 12) {
                 Button { showJoinSheet = true } label: {
                     Image(systemName: "qrcode.viewfinder")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(SD.textSecondary)
-                        .frame(width: 38, height: 38)
-                        .background(SD.bgCard)
-                        .cornerRadius(SD.radiusSm)
+                        .foregroundColor(ReferenceTheme.textPrimary)
+                        .frame(width: 40, height: 40)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                        )
                 }
                 Button { showCreateSheet = true } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(width: 38, height: 38)
-                        .background(SD.purple)
-                        .cornerRadius(SD.radiusSm)
+                        .frame(width: 40, height: 40)
+                        .background(Capsule().fill(ReferenceTheme.tealGradient))
+                        .shadow(color: ReferenceTheme.tealStart.opacity(0.4), radius: 6, x: 0, y: 3)
                 }
             }
         }
@@ -80,30 +123,40 @@ struct LeaguesView: View {
 
     // MARK: My Leagues
     private var myLeaguesSection: some View {
-        VStack(spacing: SD.sm) {
-            SectionHeader(title: "Your Leagues")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("YOUR LEAGUES")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(ReferenceTheme.textMuted)
+                .tracking(0.8)
 
-            VStack(spacing: SD.xs) {
+            VStack(spacing: 8) {
                 ForEach(leagues, id: \.self) { name in
-                    HStack(spacing: SD.sm) {
+                    HStack(spacing: 12) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(SD.purpleDim)
+                                .fill(ReferenceTheme.tealStart.opacity(0.2))
                                 .frame(width: 40, height: 40)
                             Image(systemName: "person.3.fill")
                                 .font(.system(size: 15))
-                                .foregroundColor(SD.purple)
+                                .foregroundColor(ReferenceTheme.tealStart)
                         }
                         Text(name)
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(SD.textPrimary)
+                            .foregroundColor(ReferenceTheme.textPrimary)
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12))
-                            .foregroundColor(SD.textMuted)
+                            .foregroundColor(ReferenceTheme.textMuted)
                     }
-                    .padding(SD.sm)
-                    .background(RoundedRectangle(cornerRadius: SD.radiusMd).fill(SD.bgCard))
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(ReferenceTheme.glassCardBg)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                            )
+                    )
                 }
             }
         }
@@ -111,8 +164,11 @@ struct LeaguesView: View {
 
     // MARK: Leaderboard Section
     private var leaderboardSection: some View {
-        VStack(spacing: SD.sm) {
-            SectionHeader(title: "Leaderboard")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("LEADERBOARD")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(ReferenceTheme.textMuted)
+                .tracking(0.8)
 
             // Toggle
             HStack(spacing: 0) {
@@ -120,15 +176,15 @@ struct LeaguesView: View {
                 leaderboardToggle(title: "Tycoon Wealth", index: 1)
             }
             .padding(4)
-            .background(SD.bgCard)
-            .cornerRadius(SD.radiusSm)
+            .background(Color.black.opacity(0.3))
+            .cornerRadius(16)
 
             // Rows
             let data = selectedLeaderboard == 0 ? goatData : tycoonData
             VStack(spacing: 0) {
                 ForEach(0..<data.count, id: \.self) { i in
                     let entry = data[i]
-                    RankRow(
+                    customRankRow(
                         rank: i + 1,
                         name: entry.0,
                         value: selectedLeaderboard == 0
@@ -137,11 +193,20 @@ struct LeaguesView: View {
                         isCurrentUser: entry.2
                     )
                     if i < data.count - 1 {
-                        Divider().background(SD.divider).padding(.horizontal, SD.sm)
+                        Divider()
+                            .background(Color.white.opacity(0.1))
+                            .padding(.horizontal, 12)
                     }
                 }
             }
-            .background(RoundedRectangle(cornerRadius: SD.radiusMd).fill(SD.bgCard))
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(ReferenceTheme.glassCardBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                    )
+            )
         }
     }
 
@@ -151,26 +216,80 @@ struct LeaguesView: View {
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(selectedLeaderboard == index ? .white : SD.textMuted)
+                .foregroundColor(selectedLeaderboard == index ? .white : ReferenceTheme.textMuted)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 10)
                 .background(
                     selectedLeaderboard == index
-                        ? AnyView(RoundedRectangle(cornerRadius: 8).fill(SD.purple))
+                        ? AnyView(Capsule().fill(ReferenceTheme.tealGradient))
                         : AnyView(Color.clear)
                 )
         }
         .buttonStyle(.plain)
     }
 
+    private func customRankRow(rank: Int, name: String, value: String, isCurrentUser: Bool) -> some View {
+        HStack(spacing: 12) {
+            // Rank badge
+            ZStack {
+                Circle()
+                    .fill(isCurrentUser ? ReferenceTheme.tealStart.opacity(0.25) : Color.white.opacity(0.08))
+                    .frame(width: 34, height: 34)
+                Text(rank <= 3 ? ["🥇","🥈","🥉"][rank - 1] : "\(rank)")
+                    .font(.system(size: rank <= 3 ? 16 : 13, weight: .bold))
+                    .foregroundColor(isCurrentUser ? ReferenceTheme.tealStart : ReferenceTheme.textMuted)
+            }
+
+            // Avatar
+            Circle()
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 34, height: 34)
+                .overlay(
+                    Text(name.prefix(1).uppercased())
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(isCurrentUser ? ReferenceTheme.tealStart : ReferenceTheme.textPrimary)
+                )
+
+            Text(name)
+                .font(.system(size: 15, weight: isCurrentUser ? .bold : .regular))
+                .foregroundColor(isCurrentUser ? ReferenceTheme.textPrimary : ReferenceTheme.textMuted)
+                .lineLimit(1)
+
+            Spacer()
+
+            Text(value)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(isCurrentUser ? ReferenceTheme.tealStart : ReferenceTheme.textPrimary)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .background(
+            Group {
+                if isCurrentUser {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(ReferenceTheme.tealStart.opacity(0.18))
+                }
+            }
+        )
+    }
+
     // MARK: Sheets
     private var createSheet: some View {
         SheetContainer(title: "Create League", isPresented: $showCreateSheet) {
-            VStack(spacing: SD.md) {
+            VStack(spacing: 16) {
                 StrideTextField(placeholder: "League name", text: $leagueName)
-                PurpleButton("Create League", icon: "plus") {
+                Button {
                     leagueName = ""
                     showCreateSheet = false
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
+                        Text("Create League").font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Capsule().fill(ReferenceTheme.tealGradient))
                 }
             }
         }
@@ -178,11 +297,20 @@ struct LeaguesView: View {
 
     private var joinSheet: some View {
         SheetContainer(title: "Join with Code", isPresented: $showJoinSheet) {
-            VStack(spacing: SD.md) {
+            VStack(spacing: 16) {
                 StrideTextField(placeholder: "Invite code", text: $inviteCode)
-                PurpleButton("Join League", icon: "arrow.right") {
+                Button {
                     inviteCode = ""
                     showJoinSheet = false
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.right").font(.system(size: 14, weight: .semibold))
+                        Text("Join League").font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Capsule().fill(ReferenceTheme.tealGradient))
                 }
             }
         }
@@ -197,3 +325,4 @@ struct LeaguesView_Previews: PreviewProvider {
             .preferredColorScheme(.dark)
     }
 }
+
