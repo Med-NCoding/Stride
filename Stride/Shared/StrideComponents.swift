@@ -27,6 +27,9 @@ enum StrideTab: Int, CaseIterable {
 struct StrideTabBar: View {
     @Binding var selected: StrideTab
 
+    private let tealStart = Color(red: 0.22, green: 0.68, blue: 0.74)
+    private let tealEnd = Color(red: 0.12, green: 0.48, blue: 0.55)
+
     var body: some View {
         HStack(spacing: 0) {
             ForEach(StrideTab.allCases, id: \.rawValue) { tab in
@@ -38,22 +41,29 @@ struct StrideTabBar: View {
                     VStack(spacing: 5) {
                         Image(systemName: tab.icon)
                             .font(.system(size: selected == tab ? 20 : 18, weight: .semibold))
-                            .foregroundColor(selected == tab ? SD.purple : SD.textMuted)
+                            .foregroundColor(selected == tab ? .white : Color.white.opacity(0.6))
                             .scaleEffect(selected == tab ? 1.1 : 1.0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selected)
 
                         Text(tab.label)
-                            .font(.system(size: 10, weight: selected == tab ? .semibold : .regular))
-                            .foregroundColor(selected == tab ? SD.purple : SD.textMuted)
+                            .font(.system(size: 10, weight: selected == tab ? .bold : .regular))
+                            .foregroundColor(selected == tab ? .white : Color.white.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 10)
                     .background(
                         Group {
                             if selected == tab {
-                                RoundedRectangle(cornerRadius: SD.radiusSm)
-                                    .fill(SD.purpleDim)
-                                    .padding(.horizontal, 6)
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [tealStart, tealEnd],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .padding(.horizontal, 8)
+                                    .shadow(color: tealStart.opacity(0.4), radius: 6, x: 0, y: 3)
                             }
                         }
                     )
@@ -61,13 +71,16 @@ struct StrideTabBar: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, SD.sm)
-        .padding(.bottom, 8)
-        .padding(.top, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 26)
-                .fill(SD.bgCard)
-                .shadow(color: .black.opacity(0.6), radius: 20, x: 0, y: 8)
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color.black.opacity(0.45))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: 8)
         )
         .padding(.horizontal, 20)
     }

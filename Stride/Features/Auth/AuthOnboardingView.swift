@@ -15,6 +15,24 @@ enum UsernameState {
     case available      // All good — ready to proceed
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - Reference Photo Design Palette & Components
+// ─────────────────────────────────────────────────────────────────────────────
+private struct ReferenceTheme {
+    static let bgTop = Color(red: 0.26, green: 0.34, blue: 0.38)
+    static let bgBottom = Color(red: 0.12, green: 0.16, blue: 0.20)
+    static let tealStart = Color(red: 0.22, green: 0.68, blue: 0.74)
+    static let tealEnd = Color(red: 0.12, green: 0.48, blue: 0.55)
+    static let tealGradient = LinearGradient(
+        colors: [tealStart, tealEnd],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+    static let glassCardBg = Color.black.opacity(0.32)
+    static let glassBorder = Color.white.opacity(0.18)
+    static let textPrimary = Color.white
+    static let textMuted = Color.white.opacity(0.65)
+}
 
 struct AuthOnboardingView: View {
     @EnvironmentObject private var stateManager:  AppStateManager
@@ -33,50 +51,90 @@ struct AuthOnboardingView: View {
     // ── Username validation state ──────────────────────────────────────────
     @State private var usernameState: UsernameState = .idle
 
-
     // ── Async state ────────────────────────────────────────────────────────
     @State private var isLoading   = false
     @State private var errorMessage: String? = nil
     @State private var profileError: String? = nil  // Error shown on the health card
 
-
     var body: some View {
         ZStack {
-            SD.bgPrimary.ignoresSafeArea()
+            // Atmospheric gradient background matching reference photo
+            LinearGradient(
+                colors: [ReferenceTheme.bgTop, ReferenceTheme.bgBottom],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // Ambient warm glow bokeh (top-right light flare as in reference image)
+            Circle()
+                .fill(Color(red: 1.0, green: 0.62, blue: 0.30).opacity(0.35))
+                .frame(width: 240, height: 240)
+                .blur(radius: 50)
+                .offset(x: 110, y: -120)
+
+            // Secondary cool teal glow
+            Circle()
+                .fill(ReferenceTheme.tealStart.opacity(0.20))
+                .frame(width: 300, height: 300)
+                .blur(radius: 60)
+                .offset(x: -120, y: 150)
 
             VStack(spacing: 0) {
-                Spacer()
-
-                // ── Logo ───────────────────────────────────────────────────
-                VStack(spacing: SD.sm) {
-                    ZStack {
-                        Circle()
-                            .fill(SD.purpleDim)
-                            .frame(width: 80, height: 80)
-                        Circle()
-                            .strokeBorder(SD.purple.opacity(0.4), lineWidth: 1.5)
-                            .frame(width: 80, height: 80)
-                        Image(systemName: "figure.walk")
-                            .font(.system(size: 32, weight: .semibold))
-                            .foregroundColor(SD.purple)
+                // ── Top Header Navigation ────────────────────────────────────
+                HStack {
+                    // Left menu icon
+                    Button {
+                        // Action if needed
+                    } label: {
+                        VStack(spacing: 4) {
+                            Capsule().fill(Color.white.opacity(0.9)).frame(width: 20, height: 3)
+                            Capsule().fill(Color.white.opacity(0.9)).frame(width: 14, height: 3)
+                        }
                     }
 
+                    Spacer()
+
+                    // Center Brand
                     Text("Stride")
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .foregroundColor(SD.textPrimary)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundColor(ReferenceTheme.textPrimary)
+
+                    Spacer()
+
+                    // Right Icon
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(ReferenceTheme.textPrimary)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+
+                Spacer(minLength: 16)
+
+                // ── Logo & Title Section (matching photo header layout) ──────
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("stride")
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundColor(ReferenceTheme.textPrimary)
+
+                    Text("Welcome")
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundColor(ReferenceTheme.textPrimary)
 
                     Text(subtitleText)
-                        .font(.system(size: 15))
-                        .foregroundColor(SD.textMuted)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
+                        .font(.system(size: 14))
+                        .foregroundColor(ReferenceTheme.textMuted)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .animation(.easeInOut(duration: SD.animNormal), value: stateManager.rootState)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 28)
+                .padding(.bottom, 16)
 
-                Spacer()
-
-                // ── Card ───────────────────────────────────────────────────
-                VStack(spacing: SD.md) {
+                // ── Main Content Glass Card ──────────────────────────────────
+                VStack(spacing: 16) {
                     if stateManager.rootState == .signedOut {
                         authCard
                     } else {
@@ -87,10 +145,28 @@ struct AuthOnboardingView: View {
                         }
                     }
                 }
-                .padding(SD.lg)
-                .background(RoundedRectangle(cornerRadius: SD.radiusLg).fill(SD.bgCard))
-                .padding(.horizontal, SD.md)
-                .padding(.bottom, 40)
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(ReferenceTheme.glassCardBg)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal, 20)
+
+                Spacer(minLength: 16)
+
+                // ── Bottom Quick Action Tiles (matching bottom 4 tiles in photo) ──
+                HStack(spacing: 12) {
+                    bottomFeatureTile(icon: "figure.walk", title: "Activity")
+                    bottomFeatureTile(icon: "trophy.fill", title: "Leagues")
+                    bottomFeatureTile(icon: "bag.fill", title: "Shop")
+                    bottomFeatureTile(icon: "person.2.fill", title: "Social")
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
         }
     }
@@ -100,26 +176,31 @@ struct AuthOnboardingView: View {
     // ─────────────────────────────────────────────────────────────────────────
 
     private var authCard: some View {
-        VStack(spacing: SD.md) {
+        VStack(spacing: 16) {
 
-            // Mode toggle
+            // Mode toggle with Teal active state
             HStack(spacing: 0) {
                 modeTab(title: "Sign Up",  active: isSignUp)  { withAnimation { isSignUp = true;  errorMessage = nil } }
                 modeTab(title: "Sign In",  active: !isSignUp) { withAnimation { isSignUp = false; errorMessage = nil } }
             }
             .padding(4)
-            .background(SD.bgSurface)
-            .cornerRadius(SD.radiusSm)
+            .background(Color.black.opacity(0.3))
+            .cornerRadius(16)
 
             // Email
-            StrideTextField(
+            CustomGlassTextField(
                 placeholder: "Email address",
                 text: $email,
+                icon: "envelope.fill",
                 keyboardType: .emailAddress
             )
 
-            // Password — SecureField so characters are masked
-            SecureStrideField(placeholder: "Password", text: $password)
+            // Password — Masked SecureField
+            CustomGlassSecureField(
+                placeholder: "Password",
+                text: $password,
+                icon: "lock.fill"
+            )
 
             // Inline error — appears below fields if auth fails
             if let error = errorMessage {
@@ -138,21 +219,13 @@ struct AuthOnboardingView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // Primary action button
-            PurpleButton(
-                isSignUp ? "Create Account" : "Sign In",
-                icon: isLoading ? nil : "arrow.right"
+            // Primary action button (Teal Pill Button matching reference CTA)
+            TealPillButton(
+                title: isSignUp ? "Sign Up" : "Sign In",
+                icon: isLoading ? nil : "arrow.right",
+                isLoading: isLoading
             ) {
                 Task { await handleAuth() }
-            }
-            .disabled(isLoading)
-            .overlay {
-                if isLoading {
-                    RoundedRectangle(cornerRadius: SD.radiusFull)
-                        .fill(SD.purple)
-                    ProgressView()
-                        .tint(.white)
-                }
             }
 
             // Mode switch hint
@@ -162,8 +235,8 @@ struct AuthOnboardingView: View {
                 Text(isSignUp
                      ? "Already have an account? Sign in"
                      : "No account yet? Sign up")
-                    .font(SFont.caption)
-                    .foregroundColor(SD.textMuted)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(ReferenceTheme.textMuted)
             }
             .buttonStyle(.plain)
         }
@@ -174,16 +247,15 @@ struct AuthOnboardingView: View {
     // ─────────────────────────────────────────────────────────────────────────
 
     private var profileCard: some View {
-        VStack(spacing: SD.md) {
+        VStack(spacing: 16) {
 
             // ── Username field ─────────────────────────────────────────────
-            VStack(alignment: .leading, spacing: SD.xs) {
-                StrideTextField(
-                    placeholder: "Username  (e.g. sprint_king)",
-                    text: $username
+            VStack(alignment: .leading, spacing: 6) {
+                CustomGlassTextField(
+                    placeholder: "Username (e.g. sprint_king)",
+                    text: $username,
+                    icon: "at"
                 )
-                // Validate format locally on every keystroke.
-                // Single-argument form is used for broadest compatibility.
                 .onChange(of: username) { _ in
                     validateUsernameFormat()
                 }
@@ -193,32 +265,29 @@ struct AuthOnboardingView: View {
             }
 
             // ── Display name field ─────────────────────────────────────────
-            StrideTextField(placeholder: "Display name  (e.g. Medhansh)", text: $displayName)
+            CustomGlassTextField(
+                placeholder: "Display name (e.g. Medhansh)",
+                text: $displayName,
+                icon: "person.fill"
+            )
 
             Text("Username is your unique handle. Display name is shown to you in the app.")
-                .font(SFont.micro)
-                .foregroundColor(SD.textMuted)
+                .font(.system(size: 12))
+                .foregroundColor(ReferenceTheme.textMuted)
                 .multilineTextAlignment(.center)
 
             // ── Next button ────────────────────────────────────────────────
-            // Enabled only when format is valid; tapping triggers availability check.
-            PurpleButton("Next") {
+            TealPillButton(
+                title: "Next",
+                icon: usernameState == .checking ? nil : "arrow.right",
+                isLoading: usernameState == .checking || isLoading,
+                disabled: usernameState != .available || isLoading
+            ) {
                 Task { await handleProfileNext() }
-            }
-            .disabled(usernameState != .available || isLoading)
-            .overlay {
-                if usernameState == .checking {
-                    RoundedRectangle(cornerRadius: SD.radiusFull)
-                        .fill(SD.purple)
-                    ProgressView().tint(.white)
-                }
             }
         }
     }
 
-    // Inline username status indicator.
-    // Uses if/else if instead of a switch inside @ViewBuilder to avoid
-    // a known SwiftUI crash with switch expressions on enum @State values.
     @ViewBuilder
     private var usernameFeedbackPill: some View {
         if usernameState == .invalidFormat,
@@ -227,7 +296,7 @@ struct AuthOnboardingView: View {
         } else if usernameState == .checking {
             feedbackRow(icon: "arrow.triangle.2.circlepath",
                         text: "Checking availability…",
-                        color: SD.textMuted)
+                        color: ReferenceTheme.textMuted)
         } else if usernameState == .taken {
             feedbackRow(icon: "xmark.circle.fill",
                         text: "@\(username.lowercased()) is already taken.",
@@ -237,7 +306,6 @@ struct AuthOnboardingView: View {
                         text: "@\(username.lowercased()) is available!",
                         color: SD.success)
         }
-        // .idle falls through — nothing rendered
     }
 
     private func feedbackRow(icon: String, text: String, color: Color) -> some View {
@@ -246,40 +314,39 @@ struct AuthOnboardingView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(color)
             Text(text)
-                .font(SFont.micro)
+                .font(.system(size: 12))
                 .foregroundColor(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .transition(.opacity)
     }
 
-
     // ─────────────────────────────────────────────────────────────────────────
     // MARK: - Health Card
     // ─────────────────────────────────────────────────────────────────────────
 
     private var healthCard: some View {
-        VStack(spacing: SD.md) {
+        VStack(spacing: 16) {
 
             // ── Header row ────────────────────────────────────────────────────
-            HStack(spacing: SD.sm) {
+            HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(SD.health.opacity(0.15))
+                        .fill(ReferenceTheme.tealStart.opacity(0.2))
                         .frame(width: 44, height: 44)
                     Image(systemName: "heart.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(SD.health)
+                        .foregroundColor(ReferenceTheme.tealStart)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Apple Health")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(SD.textPrimary)
+                        .foregroundColor(ReferenceTheme.textPrimary)
                     Text(healthService.isAvailable
                          ? "Read-only step count access."
                          : "Not available on this device.")
                         .font(.system(size: 12))
-                        .foregroundColor(SD.textMuted)
+                        .foregroundColor(ReferenceTheme.textMuted)
                 }
                 Spacer()
                 // Status badge
@@ -301,18 +368,17 @@ struct AuthOnboardingView: View {
                         .cornerRadius(SD.radiusFull)
                 }
             }
-            .padding(SD.sm)
-            .background(SD.bgSurface)
-            .cornerRadius(SD.radiusSm)
+            .padding(12)
+            .background(Color.white.opacity(0.06))
+            .cornerRadius(14)
 
-            // ── Denied state hint ────────────────────────────────────────────
             if healthService.status == .denied {
                 HStack(spacing: SD.xs) {
                     Image(systemName: "info.circle.fill")
                         .font(.system(size: 13))
                         .foregroundColor(SD.info)
                     Text("To enable later: Settings → Privacy → Health → Stride.")
-                        .font(SFont.micro)
+                        .font(.system(size: 11))
                         .foregroundColor(SD.info)
                 }
                 .padding(SD.sm)
@@ -321,7 +387,6 @@ struct AuthOnboardingView: View {
                 .cornerRadius(SD.radiusSm)
             }
 
-            // ── Profile save error ───────────────────────────────────────────
             if let err = profileError {
                 HStack(spacing: SD.xs) {
                     Image(systemName: "exclamationmark.circle.fill")
@@ -338,83 +403,81 @@ struct AuthOnboardingView: View {
                 .transition(.opacity)
             }
 
-            // ── Primary button ───────────────────────────────────────────────
-            // Label changes based on current health permission state:
-            //   Not determined → asks for permission first, then saves
-            //   Authorized     → just saves the profile
-            //   Denied         → saves anyway (steps will be 0 until user re-grants)
-            PurpleButton(
-                healthService.status == .authorized
+            TealPillButton(
+                title: healthService.status == .authorized
                     ? "Start Walking!"
                     : healthService.status == .denied
                         ? "Continue Without Health"
-                        : "Connect & Start Walking"
+                        : "Connect & Start Walking",
+                isLoading: isLoading,
+                disabled: isLoading
             ) {
                 Task { await handleCompleteOnboarding() }
-            }
-            .disabled(isLoading)
-            .overlay {
-                if isLoading {
-                    RoundedRectangle(cornerRadius: SD.radiusFull)
-                        .fill(SD.purple)
-                    ProgressView().tint(.white)
-                }
             }
 
             Text("Step data is read-only and never shared with third parties.")
                 .font(.system(size: 11))
-                .foregroundColor(SD.textMuted)
+                .foregroundColor(ReferenceTheme.textMuted)
                 .multilineTextAlignment(.center)
         }
     }
 
-
     // ─────────────────────────────────────────────────────────────────────────
-    // MARK: - Helper Views
+    // MARK: - Helper Views & Components
     // ─────────────────────────────────────────────────────────────────────────
 
     private func modeTab(title: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(active ? .white : SD.textMuted)
+                .foregroundColor(active ? .white : ReferenceTheme.textMuted)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 10)
                 .background(
                     active
-                        ? AnyView(RoundedRectangle(cornerRadius: 8).fill(SD.purple))
+                        ? AnyView(Capsule().fill(ReferenceTheme.tealGradient))
                         : AnyView(Color.clear)
                 )
         }
         .buttonStyle(.plain)
     }
 
+    private func bottomFeatureTile(icon: String, title: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(ReferenceTheme.textPrimary)
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(ReferenceTheme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(red: 0.20, green: 0.55, blue: 0.62).opacity(0.22))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                )
+        )
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // MARK: - Username Validation Logic
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Called on every keystroke via .onChange(of: username).
-    // Runs the local format check immediately (no network).
-    // If format is valid, kicks off the availability check automatically.
     private func validateUsernameFormat() {
         let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // If empty go back to idle — don't show errors yet
         guard !trimmed.isEmpty else { usernameState = .idle; return }
 
         if ProfileService.localValidate(username: trimmed) != nil {
-            // Format is bad — show format error instantly
             withAnimation { usernameState = .invalidFormat }
         } else {
-            // Format is good — trigger availability check
             Task { await checkUsernameAvailability(trimmed) }
         }
     }
 
-    // Network availability check. Marks the field as .checking while in-flight.
-    // On a server/network error we fall back to .available rather than blocking
-    // the user — a duplicate-key conflict on insert would still be caught later.
     private func checkUsernameAvailability(_ trimmed: String) async {
         withAnimation { usernameState = .checking }
         do {
@@ -423,16 +486,10 @@ struct AuthOnboardingView: View {
                 usernameState = available ? .available : .taken
             }
         } catch {
-            // Server error (e.g. table not yet created) — don't block the user.
-            // If the username is somehow a duplicate the insert will fail later
-            // and show a proper error on the health card.
             withAnimation { usernameState = .available }
         }
     }
 
-    // Called when user taps "Next" on the profile card.
-    // At this point the username is already .available (button is disabled otherwise),
-    // so we just advance the internal step.
     private func handleProfileNext() async {
         guard usernameState == .available else { return }
         withAnimation { internalStep = 1 }
@@ -442,23 +499,15 @@ struct AuthOnboardingView: View {
     // MARK: - Onboarding Completion Logic
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Called when user taps the button on the health card.
-    // Step 1: Request HealthKit permission (if not yet determined).
-    // Step 2: Save the profile to Supabase regardless of HK outcome
-    //         (denied users can still use leagues — steps will show 0).
     private func handleCompleteOnboarding() async {
         isLoading    = true
         profileError = nil
 
-        // 1. Ask for HealthKit permission only if not yet asked.
         if healthService.status == .notDetermined && healthService.isAvailable {
             _ = await healthService.requestAuthorization()
-            // Small delay so the permission sheet fully dismisses before
-            // we transition to the home screen.
             try? await Task.sleep(nanoseconds: 300_000_000)
         }
 
-        // 2. Save the profile to Supabase.
         do {
             try await stateManager.completeOnboarding(
                 username: username,
@@ -477,7 +526,6 @@ struct AuthOnboardingView: View {
     // ─────────────────────────────────────────────────────────────────────────
 
     private func handleAuth() async {
-        // Guard: both fields must be non-empty
         let trimEmail    = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimEmail.isEmpty, !trimPassword.isEmpty else {
@@ -501,7 +549,6 @@ struct AuthOnboardingView: View {
         } catch let authError as AppAuthError {
             errorMessage = authError.localizedDescription
         } catch {
-            // Map Supabase error messages into user-friendly strings.
             let msg = error.localizedDescription.lowercased()
             if msg.contains("invalid") || msg.contains("credentials") || msg.contains("wrong") {
                 errorMessage = "Incorrect email or password."
@@ -516,10 +563,6 @@ struct AuthOnboardingView: View {
 
         isLoading = false
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // MARK: - Dynamic subtitle
-    // ─────────────────────────────────────────────────────────────────────────
 
     private var subtitleText: String {
         switch stateManager.rootState {
@@ -536,36 +579,119 @@ struct AuthOnboardingView: View {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - SecureStrideField
-//
-// Matches the visual style of StrideTextField but masks input (for passwords).
-// Lives here rather than in Shared/ so it doesn't pollute the global component
-// namespace until we decide if it's needed elsewhere.
+// MARK: - Custom UI Helper Controls (Teal & Glassmorphic)
 // ─────────────────────────────────────────────────────────────────────────────
 
-struct SecureStrideField: View {
-    let placeholder: String
-    @Binding var text: String
-    @FocusState private var focused: Bool
+struct TealPillButton: View {
+    let title: String
+    var icon: String? = nil
+    var isLoading: Bool = false
+    var disabled: Bool = false
+    let action: () -> Void
 
     var body: some View {
-        SecureField(placeholder, text: $text)
-            .focused($focused)
-            .font(SFont.body)
-            .foregroundColor(SD.textPrimary)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-            .padding(SD.sm)
-            .background(SD.bgSurface)
-            .cornerRadius(SD.radiusMd)
-            .overlay(
-                RoundedRectangle(cornerRadius: SD.radiusMd)
-                    .strokeBorder(
-                        focused ? SD.borderActive : SD.borderDefault,
-                        lineWidth: focused ? 1.5 : 1
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                    if let icon = icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                Capsule()
+                    .fill(
+                        disabled
+                        ? LinearGradient(colors: [Color.white.opacity(0.2), Color.white.opacity(0.15)], startPoint: .leading, endPoint: .trailing)
+                        : ReferenceTheme.tealGradient
                     )
             )
-            .animation(.easeInOut(duration: SD.animFast), value: focused)
+            .shadow(color: disabled ? .clear : ReferenceTheme.tealStart.opacity(0.4), radius: 8, x: 0, y: 4)
+        }
+        .disabled(disabled || isLoading)
+        .buttonStyle(.plain)
+    }
+}
+
+struct CustomGlassTextField: View {
+    let placeholder: String
+    @Binding var text: String
+    var icon: String? = nil
+    var keyboardType: UIKeyboardType = .default
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let icon = icon {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundColor(isFocused ? ReferenceTheme.tealStart : ReferenceTheme.textMuted)
+            }
+
+            TextField(placeholder, text: $text)
+                .keyboardType(keyboardType)
+                .focused($isFocused)
+                .font(.system(size: 15))
+                .foregroundColor(ReferenceTheme.textPrimary)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.07))
+        .cornerRadius(14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(
+                    isFocused ? ReferenceTheme.tealStart.opacity(0.7) : Color.white.opacity(0.15),
+                    lineWidth: isFocused ? 1.5 : 1
+                )
+        )
+        .animation(.easeInOut(duration: 0.2), value: isFocused)
+    }
+}
+
+struct CustomGlassSecureField: View {
+    let placeholder: String
+    @Binding var text: String
+    var icon: String? = nil
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let icon = icon {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundColor(isFocused ? ReferenceTheme.tealStart : ReferenceTheme.textMuted)
+            }
+
+            SecureField(placeholder, text: $text)
+                .focused($isFocused)
+                .font(.system(size: 15))
+                .foregroundColor(ReferenceTheme.textPrimary)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.07))
+        .cornerRadius(14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(
+                    isFocused ? ReferenceTheme.tealStart.opacity(0.7) : Color.white.opacity(0.15),
+                    lineWidth: isFocused ? 1.5 : 1
+                )
+        )
+        .animation(.easeInOut(duration: 0.2), value: isFocused)
     }
 }
 
@@ -577,3 +703,4 @@ struct AuthOnboardingView_Previews: PreviewProvider {
             .preferredColorScheme(.dark)
     }
 }
+
