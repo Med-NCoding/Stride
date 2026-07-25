@@ -10,7 +10,7 @@ struct ContentView: View {
             case .loading:
                 AppLoadingView()
             case .signedOut, .onboardingRequired:
-                AuthOnboardingView()
+                IntroWelcomeView()
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .move(edge: .leading).combined(with: .opacity)
