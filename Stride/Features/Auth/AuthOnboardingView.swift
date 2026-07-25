@@ -156,17 +156,7 @@ struct AuthOnboardingView: View {
                 )
                 .padding(.horizontal, 20)
 
-                Spacer(minLength: 16)
-
-                // ── Bottom Quick Action Tiles (matching bottom 4 tiles in photo) ──
-                HStack(spacing: 12) {
-                    bottomFeatureTile(icon: "figure.walk", title: "Activity")
-                    bottomFeatureTile(icon: "trophy.fill", title: "Leagues")
-                    bottomFeatureTile(icon: "bag.fill", title: "Shop")
-                    bottomFeatureTile(icon: "person.2.fill", title: "Social")
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                Spacer(minLength: 24)
             }
         }
     }
