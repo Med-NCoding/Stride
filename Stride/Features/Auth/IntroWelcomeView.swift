@@ -1,4 +1,5 @@
 import SwiftUI
+import Contacts
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Reference Photo Theme Palette & Components
@@ -19,8 +20,10 @@ private struct ReferenceTheme {
 
 struct IntroWelcomeView: View {
     @State private var hasEntered = false
+    @State private var isFloating = false
+    @State private var contactImages: [UIImage] = []
 
-    // Orbiting user avatar icons & initials
+    // Orbiting user avatar icons
     private let avatarIcons = [
         "person.fill", "figure.walk", "flame.fill", "trophy.fill",
         "bolt.fill", "heart.fill", "star.fill", "crown.fill",
@@ -37,6 +40,14 @@ struct IntroWelcomeView: View {
         } else {
             welcomeScreen
                 .transition(.opacity)
+                .onAppear {
+                    // Start gentle floating animation
+                    withAnimation(Animation.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
+                        isFloating = true
+                    }
+                    // Safely check and load contacts without breaking Xcode previews
+                    fetchUserContactsSafely()
+                }
         }
     }
 
@@ -67,7 +78,7 @@ struct IntroWelcomeView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // ── Orbiting Contact / Friends Wheel (Matching Reference Photo) ──
+                // ── Orbiting / Floating Contact Friends Wheel (Matching Reference Photo) ──
                 ZStack {
                     // Outer dark orbital track ring
                     Circle()
@@ -95,50 +106,68 @@ struct IntroWelcomeView: View {
                             }
                         )
 
-                    // Staggered contacts orbiting across inner and outer circular tracks
+                    // Staggered floating profile avatars drifting organically in space
                     ForEach(0..<11, id: \.self) { index in
                         let isOuter = (index % 2 == 0)
                         let radius: CGFloat = isOuter ? 128 : 86
-                        let angle = (Double(index) * (360.0 / 11.0) - 90.0) * .pi / 180.0
-                        let x = cos(angle) * radius
-                        let y = sin(angle) * radius
+                        let baseAngle = (Double(index) * (360.0 / 11.0) - 90.0) * .pi / 180.0
+                        let x = cos(baseAngle) * radius
+                        let y = sin(baseAngle) * radius
+
+                        // Organic floating drift offset
+                        let floatX: CGFloat = isFloating ? (index % 2 == 0 ? 6.0 : -6.0) : 0.0
+                        let floatY: CGFloat = isFloating ? (index % 3 == 0 ? -7.0 : 7.0) : 0.0
+
                         let size: CGFloat = isOuter ? 40 : 34
                         let isRoundedSquare = (index % 3 == 0)
 
                         ZStack {
-                            Group {
-                                if isRoundedSquare {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(
-                                            LinearGradient(
-                                                colors: index % 2 == 0
-                                                ? [ReferenceTheme.tealStart, ReferenceTheme.tealEnd]
-                                                : [Color(red: 0.95, green: 0.55, blue: 0.35), Color(red: 0.85, green: 0.40, blue: 0.25)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
+                            if index < contactImages.count {
+                                Image(uiImage: contactImages[index])
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: size, height: size)
+                                    .clipShape(RoundedRectangle(cornerRadius: isRoundedSquare ? 12 : size / 2, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: isRoundedSquare ? 12 : size / 2, style: .continuous)
+                                            .strokeBorder(Color.white.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.35), radius: 4, x: 0, y: 2)
+                            } else {
+                                Group {
+                                    if isRoundedSquare {
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: index % 2 == 0
+                                                    ? [ReferenceTheme.tealStart, ReferenceTheme.tealEnd]
+                                                    : [Color(red: 0.95, green: 0.55, blue: 0.35), Color(red: 0.85, green: 0.40, blue: 0.25)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
                                             )
-                                        )
-                                } else {
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: index % 2 == 0
-                                                ? [Color(red: 0.28, green: 0.38, blue: 0.45), Color(red: 0.16, green: 0.22, blue: 0.28)]
-                                                : [ReferenceTheme.tealStart, ReferenceTheme.tealEnd],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
+                                    } else {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: index % 2 == 0
+                                                    ? [Color(red: 0.28, green: 0.38, blue: 0.45), Color(red: 0.16, green: 0.22, blue: 0.28)]
+                                                    : [ReferenceTheme.tealStart, ReferenceTheme.tealEnd],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
                                             )
-                                        )
+                                    }
                                 }
-                            }
-                            .frame(width: size, height: size)
-                            .shadow(color: Color.black.opacity(0.35), radius: 4, x: 0, y: 2)
+                                .frame(width: size, height: size)
+                                .shadow(color: Color.black.opacity(0.35), radius: 4, x: 0, y: 2)
 
-                            Image(systemName: avatarIcons[index % avatarIcons.count])
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
+                                Image(systemName: avatarIcons[index % avatarIcons.count])
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
                         }
-                        .offset(x: x, y: y)
+                        .offset(x: x + floatX, y: y + floatY)
                     }
                 }
                 .padding(.top, 30)
@@ -178,6 +207,44 @@ struct IntroWelcomeView: View {
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 48)
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MARK: - Safe Preview-Friendly Contacts Integration
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private func fetchUserContactsSafely() {
+        // Guard against running inside Xcode Canvas Previews to prevent preview crashes
+        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
+
+        let store = CNContactStore()
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        if status == .authorized {
+            readContacts(store: store)
+        }
+    }
+
+    private func readContacts(store: CNContactStore) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let keys = [
+                CNContactImageDataKey as CNKeyDescriptor,
+                CNContactGivenNameKey as CNKeyDescriptor
+            ]
+            let request = CNContactFetchRequest(keysToFetch: keys)
+            var images: [UIImage] = []
+
+            try? store.enumerateContacts(with: request) { contact, _ in
+                if let data = contact.imageData, let img = UIImage(data: data) {
+                    images.append(img)
+                }
+            }
+
+            if !images.isEmpty {
+                DispatchQueue.main.async {
+                    self.contactImages = images
+                }
             }
         }
     }
