@@ -21,11 +21,20 @@ private struct ReferenceTheme {
 
 struct HomeView: View {
     @EnvironmentObject private var stateManager: AppStateManager
-    @State private var stepCount    = 8450
+    @EnvironmentObject private var healthService: HealthKitService
+
     @State private var stepGoal     = 10000
     @State private var balance      = 420
-    @State private var weeklySteps  = 51200
     @State private var leagueRank   = 2
+
+    // Real step count fetched from Apple Health
+    private var stepCount: Int {
+        healthService.todaySteps
+    }
+
+    private var weeklySteps: Int {
+        healthService.weeklySteps
+    }
 
     private var progress: Double { Double(stepCount) / Double(stepGoal) }
 
@@ -64,6 +73,12 @@ struct HomeView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
             }
+        }
+        .onAppear {
+            healthService.refreshAuthStatus()
+        }
+        .task {
+            await healthService.fetchAllSteps()
         }
     }
 
@@ -132,7 +147,7 @@ struct HomeView: View {
                     .frame(width: 200, height: 200)
                     .animation(.easeInOut(duration: 1.0), value: progress)
 
-                // Centre text
+                // Centre text showing real dynamic steps from Apple Health
                 VStack(spacing: 2) {
                     Text("\(stepCount)")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
@@ -239,7 +254,7 @@ struct HomeView: View {
             // Weekly bar chart
             HStack(alignment: .bottom, spacing: 6) {
                 ForEach(Array(zip(["M","T","W","T","F","S","S"],
-                                 [6200, 9100, 7400, 10200, 8450, 0, 0])),
+                                 [6200, 9100, 7400, 10200, stepCount, 0, 0])),
                         id: \.0) { day, steps in
                     VStack(spacing: 6) {
                         RoundedRectangle(cornerRadius: 4)
@@ -267,7 +282,7 @@ struct HomeView: View {
                     )
             )
 
-            // Weekly total strip
+            // Weekly total strip showing live weekly steps from HealthKit
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Weekly Total")
@@ -308,4 +323,5 @@ struct HomeView_Previews: PreviewProvider {
             .preferredColorScheme(.dark)
     }
 }
+
 
