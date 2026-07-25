@@ -1,5 +1,4 @@
 import SwiftUI
-import Contacts
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Reference Photo Theme Palette & Components
@@ -20,11 +19,8 @@ private struct ReferenceTheme {
 
 struct IntroWelcomeView: View {
     @State private var hasEntered = false
-    @State private var contactImages: [UIImage] = []
-    @State private var contactInitials: [String] = []
 
-    // Orbiting user avatar mock data for fallback
-    private let fallbackInitials = ["JD", "AS", "MK", "SL", "RL", "TW", "EM", "DB", "CM", "AB", "KP"]
+    // Orbiting user avatar icons & initials
     private let avatarIcons = [
         "person.fill", "figure.walk", "flame.fill", "trophy.fill",
         "bolt.fill", "heart.fill", "star.fill", "crown.fill",
@@ -41,9 +37,6 @@ struct IntroWelcomeView: View {
         } else {
             welcomeScreen
                 .transition(.opacity)
-                .onAppear {
-                    fetchUserContacts()
-                }
         }
     }
 
@@ -113,56 +106,37 @@ struct IntroWelcomeView: View {
                         let isRoundedSquare = (index % 3 == 0)
 
                         ZStack {
-                            if index < contactImages.count {
-                                Image(uiImage: contactImages[index])
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: size, height: size)
-                                    .clipShape(RoundedRectangle(cornerRadius: isRoundedSquare ? 12 : size / 2, style: .continuous))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: isRoundedSquare ? 12 : size / 2, style: .continuous)
-                                            .strokeBorder(Color.white.opacity(0.3), lineWidth: 1)
-                                    )
-                                    .shadow(color: Color.black.opacity(0.35), radius: 4, x: 0, y: 2)
-                            } else {
-                                Group {
-                                    if isRoundedSquare {
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: index % 2 == 0
-                                                    ? [ReferenceTheme.tealStart, ReferenceTheme.tealEnd]
-                                                    : [Color(red: 0.95, green: 0.55, blue: 0.35), Color(red: 0.85, green: 0.40, blue: 0.25)],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
+                            Group {
+                                if isRoundedSquare {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: index % 2 == 0
+                                                ? [ReferenceTheme.tealStart, ReferenceTheme.tealEnd]
+                                                : [Color(red: 0.95, green: 0.55, blue: 0.35), Color(red: 0.85, green: 0.40, blue: 0.25)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
                                             )
-                                    } else {
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: index % 2 == 0
-                                                    ? [Color(red: 0.28, green: 0.38, blue: 0.45), Color(red: 0.16, green: 0.22, blue: 0.28)]
-                                                    : [ReferenceTheme.tealStart, ReferenceTheme.tealEnd],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    }
-                                }
-                                .frame(width: size, height: size)
-                                .shadow(color: Color.black.opacity(0.35), radius: 4, x: 0, y: 2)
-
-                                if index < contactInitials.count {
-                                    Text(contactInitials[index])
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(.white)
+                                        )
                                 } else {
-                                    Image(systemName: avatarIcons[index % avatarIcons.count])
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white)
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: index % 2 == 0
+                                                ? [Color(red: 0.28, green: 0.38, blue: 0.45), Color(red: 0.16, green: 0.22, blue: 0.28)]
+                                                : [ReferenceTheme.tealStart, ReferenceTheme.tealEnd],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
                                 }
                             }
+                            .frame(width: size, height: size)
+                            .shadow(color: Color.black.opacity(0.35), radius: 4, x: 0, y: 2)
+
+                            Image(systemName: avatarIcons[index % avatarIcons.count])
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
                         }
                         .offset(x: x, y: y)
                     }
@@ -207,43 +181,6 @@ struct IntroWelcomeView: View {
             }
         }
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // MARK: - Contacts Integration
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private func fetchUserContacts() {
-        let store = CNContactStore()
-        store.requestAccess(for: .contacts) { granted, _ in
-            guard granted else { return }
-            let keys = [
-                CNContactImageDataKey as CNKeyDescriptor,
-                CNContactGivenNameKey as CNKeyDescriptor,
-                CNContactFamilyNameKey as CNKeyDescriptor
-            ]
-            let request = CNContactFetchRequest(keysToFetch: keys)
-            var fetchedImages: [UIImage] = []
-            var fetchedInitials: [String] = []
-
-            try? store.enumerateContacts(with: request) { contact, _ in
-                if let data = contact.imageData, let img = UIImage(data: data) {
-                    fetchedImages.append(img)
-                } else {
-                    let first = contact.givenName.prefix(1)
-                    let last = contact.familyName.prefix(1)
-                    let initials = "\(first)\(last)".uppercased()
-                    if !initials.isEmpty {
-                        fetchedInitials.append(initials)
-                    }
-                }
-            }
-
-            DispatchQueue.main.async {
-                self.contactImages = fetchedImages
-                self.contactInitials = fetchedInitials
-            }
-        }
-    }
 }
 
 struct IntroWelcomeView_Previews: PreviewProvider {
@@ -252,3 +189,4 @@ struct IntroWelcomeView_Previews: PreviewProvider {
             .preferredColorScheme(.dark)
     }
 }
+
