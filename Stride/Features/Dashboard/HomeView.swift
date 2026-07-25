@@ -24,8 +24,10 @@ struct HomeView: View {
     @EnvironmentObject private var healthService: HealthKitService
 
     @State private var stepGoal     = 10000
-    @State private var balance      = 420
-    @State private var leagueRank   = 2
+
+    private var balance: Int {
+        stateManager.currentUser?.strideBalance ?? 100
+    }
 
     // Real step count fetched from Apple Health
     private var stepCount: Int {
@@ -37,6 +39,16 @@ struct HomeView: View {
     }
 
     private var progress: Double { Double(stepCount) / Double(stepGoal) }
+
+    private var dayLabels: [String] {
+        let cal = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEEE"
+        return (0..<7).reversed().map { offset in
+            let date = cal.date(byAdding: .day, value: -offset, to: Date()) ?? Date()
+            return formatter.string(from: date).uppercased()
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -195,8 +207,8 @@ struct HomeView: View {
             )
             glassStatCard(
                 title: "League Rank",
-                value: "#\(leagueRank)",
-                subtitle: "This week",
+                value: "None",
+                subtitle: "No active league",
                 icon: "trophy.fill",
                 iconColor: Color(red: 1.0, green: 0.65, blue: 0.3)
             )
@@ -251,11 +263,13 @@ struct HomeView: View {
                     .foregroundColor(ReferenceTheme.tealStart)
             }
 
-            // Weekly bar chart
+            // Weekly bar chart bound to real 7-day HealthKit steps
             HStack(alignment: .bottom, spacing: 6) {
-                ForEach(Array(zip(["M","T","W","T","F","S","S"],
-                                 [6200, 9100, 7400, 10200, stepCount, 0, 0])),
-                        id: \.0) { day, steps in
+                let dailySteps = healthService.dailyStepsPastWeek
+                let labels = dayLabels
+                ForEach(0..<7, id: \.self) { index in
+                    let steps = index < dailySteps.count ? dailySteps[index] : 0
+                    let day = index < labels.count ? labels[index] : "-"
                     VStack(spacing: 6) {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(steps > 0
@@ -293,13 +307,15 @@ struct HomeView: View {
                         .foregroundColor(ReferenceTheme.textPrimary)
                 }
                 Spacer()
+                let boost = healthService.stepBoostPercentage
+                let isPositive = boost >= 0
                 HStack(spacing: 4) {
-                    Image(systemName: "arrow.up")
+                    Image(systemName: isPositive ? "arrow.up" : "arrow.down")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(SD.success)
-                    Text("+12% vs last week")
+                        .foregroundColor(isPositive ? SD.success : SD.danger)
+                    Text("\(isPositive ? "+" : "")\(Int(boost))% vs last week")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(SD.success)
+                        .foregroundColor(isPositive ? SD.success : SD.danger)
                 }
             }
             .padding(16)

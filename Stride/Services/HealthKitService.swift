@@ -35,9 +35,18 @@ final class HealthKitService: ObservableObject {
     @Published var status: HealthKitStatus = .notDetermined
     @Published var todaySteps: Int   = 0
     @Published var weeklySteps: Int  = 0
+    @Published var previousWeekSteps: Int = 0
+    @Published var dailyStepsPastWeek: [Int] = Array(repeating: 0, count: 7)
 
     // Convenience shorthand used in the health onboarding card
     var isAuthorized: Bool { status == .authorized }
+
+    /// Real calculated percentage change vs previous week's total steps.
+    var stepBoostPercentage: Double {
+        guard previousWeekSteps > 0 else { return 0.0 }
+        let diff = Double(weeklySteps - previousWeekSteps)
+        return (diff / Double(previousWeekSteps)) * 100.0
+    }
 
     // ── Private ───────────────────────────────────────────────────────────
     private let store = HKHealthStore()
@@ -131,13 +140,18 @@ final class HealthKitService: ObservableObject {
     // MARK: - Step Queries
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Fetches both today's and weekly steps.
+    /// Fetches today's steps, weekly steps, previous week's steps, and past 7 days daily breakdown.
     func fetchAllSteps() async {
-        async let today  = fetchSteps(for: todayInterval())
-        async let weekly = fetchSteps(for: weekInterval())
-        let (t, w) = await (today, weekly)
-        todaySteps  = t
-        weeklySteps = w
+        async let today    = fetchSteps(for: todayInterval())
+        async let weekly   = fetchSteps(for: weekInterval())
+        async let prevWeek = fetchSteps(for: previousWeekInterval())
+        async let daily    = fetchDailyStepsForPastWeek()
+
+        let (t, w, pw, d)  = await (today, weekly, prevWeek, daily)
+        todaySteps          = t
+        weeklySteps         = w
+        previousWeekSteps   = pw
+        dailyStepsPastWeek  = d
     }
 
     // Generic step-sum query for any date interval.
@@ -161,6 +175,25 @@ final class HealthKitService: ObservableObject {
             }
             store.execute(query)
         }
+    }
+
+    private func fetchDailyStepsForPastWeek() async -> [Int] {
+        guard isAvailable, status == .authorized else {
+            return Array(repeating: 0, count: 7)
+        }
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: Date())
+        var results: [Int] = Array(repeating: 0, count: 7)
+
+        for offset in 0..<7 {
+            let index = 6 - offset
+            let dayStart = cal.date(byAdding: .day, value: -offset, to: todayStart)!
+            let dayEnd   = offset == 0 ? Date() : cal.date(byAdding: .day, value: 1, to: dayStart)!
+            let interval = DateInterval(start: dayStart, end: dayEnd)
+            let steps    = await fetchSteps(for: interval)
+            results[index] = steps
+        }
+        return results
     }
 
 
@@ -201,5 +234,12 @@ final class HealthKitService: ObservableObject {
         let cal   = Calendar.current
         let start = cal.date(byAdding: .day, value: -6, to: cal.startOfDay(for: Date()))!
         return DateInterval(start: start, end: Date())
+    }
+
+    private func previousWeekInterval() -> DateInterval {
+        let cal   = Calendar.current
+        let start = cal.date(byAdding: .day, value: -13, to: cal.startOfDay(for: Date()))!
+        let end   = cal.date(byAdding: .day, value: -7, to: cal.startOfDay(for: Date()))!
+        return DateInterval(start: start, end: end)
     }
 }

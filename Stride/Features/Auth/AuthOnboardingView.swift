@@ -83,16 +83,6 @@ struct AuthOnboardingView: View {
             VStack(spacing: 0) {
                 // ── Top Header Navigation ────────────────────────────────────
                 HStack {
-                    // Left menu icon
-                    Button {
-                        // Action if needed
-                    } label: {
-                        VStack(spacing: 4) {
-                            Capsule().fill(Color.white.opacity(0.9)).frame(width: 20, height: 3)
-                            Capsule().fill(Color.white.opacity(0.9)).frame(width: 14, height: 3)
-                        }
-                    }
-
                     Spacer()
 
                     // Center Brand
@@ -101,11 +91,6 @@ struct AuthOnboardingView: View {
                         .foregroundColor(ReferenceTheme.textPrimary)
 
                     Spacer()
-
-                    // Right Icon
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(ReferenceTheme.textPrimary)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 12)

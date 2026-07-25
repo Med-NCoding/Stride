@@ -20,9 +20,18 @@ private struct ReferenceTheme {
 }
 
 struct ChallengesView: View {
+    @EnvironmentObject private var stateManager:  AppStateManager
+    @EnvironmentObject private var healthService: HealthKitService
+
     @State private var showCreateSheet = false
     @State private var opponent        = ""
     @State private var wager           = ""
+    @State private var selectedDurationIndex = 1
+
+    @State private var activeChallenges: [Challenge] = []
+    @State private var actionError: String? = nil
+
+    private let durationHoursMap = [6, 24, 72, 168]
 
     var body: some View {
         ZStack {
@@ -59,7 +68,14 @@ struct ChallengesView: View {
                 .padding(.top, 16)
             }
         }
+        .task {
+            await loadChallenges()
+        }
         .sheet(isPresented: $showCreateSheet) { createChallengeSheet }
+    }
+
+    private func loadChallenges() async {
+        activeChallenges = await ChallengeService.fetchActiveChallenges()
     }
 
     // MARK: Header
@@ -74,7 +90,7 @@ struct ChallengesView: View {
                     .foregroundColor(ReferenceTheme.textMuted)
             }
             Spacer()
-            Button { showCreateSheet = true } label: {
+            Button { actionError = nil; showCreateSheet = true } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 12, weight: .bold))
@@ -101,25 +117,68 @@ struct ChallengesView: View {
                 Spacer()
             }
 
-            VStack(spacing: 12) {
-                customChallengeCard(
-                    you: "You",
-                    opponent: "Alice",
-                    yourSteps: 10400,
-                    opponentSteps: 8900,
-                    wager: 50,
-                    hoursLeft: 4
-                )
-                customChallengeCard(
-                    you: "You",
-                    opponent: "Charlie",
-                    yourSteps: 5200,
-                    opponentSteps: 6100,
-                    wager: 20,
-                    hoursLeft: 48
-                )
+            if activeChallenges.isEmpty {
+                emptyActiveCard
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(activeChallenges) { item in
+                        customChallengeCard(
+                            you: "You",
+                            opponent: "Opponent",
+                            yourSteps: healthService.todaySteps,
+                            opponentSteps: item.opponentSteps,
+                            wager: item.challengerWager,
+                            hoursLeft: item.durationHours
+                        )
+                    }
+                }
             }
         }
+    }
+
+    private var emptyActiveCard: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(ReferenceTheme.tealStart.opacity(0.15))
+                    .frame(width: 54, height: 54)
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(ReferenceTheme.tealStart)
+            }
+
+            VStack(spacing: 4) {
+                Text("No Active Battles")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(ReferenceTheme.textPrimary)
+                Text("Challenge a friend to a 1-on-1 step battle and wager Stride currency.")
+                    .font(.system(size: 13))
+                    .foregroundColor(ReferenceTheme.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
+                actionError = nil
+                showCreateSheet = true
+            } label: {
+                Text("Start New Battle")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(ReferenceTheme.tealGradient))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(ReferenceTheme.glassCardBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                )
+        )
     }
 
     private func customChallengeCard(you: String, opponent: String, yourSteps: Int, opponentSteps: Int, wager: Int, hoursLeft: Int) -> some View {
@@ -221,46 +280,27 @@ struct ChallengesView: View {
                 .tracking(0.8)
 
             VStack(spacing: 8) {
-                historyRow(opponent: "Bob", result: "Won", steps: "12,400 vs 9,800", earned: "+₿ 40", won: true)
-                historyRow(opponent: "Emma", result: "Lost", steps: "7,200 vs 8,900", earned: "-₿ 30", won: false)
-                historyRow(opponent: "Daniel", result: "Won", steps: "15,100 vs 12,000", earned: "+₿ 60", won: true)
-            }
-        }
-    }
-
-    private func historyRow(opponent: String, result: String, steps: String, earned: String, won: Bool) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(won ? SD.success.opacity(0.2) : SD.danger.opacity(0.2))
-                    .frame(width: 36, height: 36)
-                Image(systemName: won ? "checkmark" : "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(won ? SD.success : SD.danger)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("vs \(opponent)")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(ReferenceTheme.textPrimary)
-                Text(steps)
-                    .font(.system(size: 12))
-                    .foregroundColor(ReferenceTheme.textMuted)
-            }
-            Spacer()
-            Text(earned)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(won ? SD.success : SD.danger)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(ReferenceTheme.glassCardBg)
-                .overlay(
+                VStack(spacing: 6) {
+                    Text("No Completed Battles Yet")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(ReferenceTheme.textPrimary)
+                    Text("Completed battle payouts and history will appear here.")
+                        .font(.system(size: 12))
+                        .foregroundColor(ReferenceTheme.textMuted)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity)
+                .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                        .fill(ReferenceTheme.glassCardBg)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                        )
                 )
-        )
+            }
+        }
     }
 
     // MARK: Create Sheet
@@ -282,16 +322,30 @@ struct ChallengesView: View {
                 StrideTextField(placeholder: "Opponent username", text: $opponent)
                 StrideTextField(placeholder: "Wager amount (₿)", text: $wager, keyboardType: .numberPad)
 
+                if let err = actionError {
+                    Text(err).font(.system(size: 12)).foregroundColor(SD.danger)
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Duration")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(ReferenceTheme.textMuted)
-                    DurationSelector()
+                    DurationSelector(selectedIndex: $selectedDurationIndex)
                 }
 
                 Button {
-                    opponent = ""; wager = ""
-                    showCreateSheet = false
+                    Task {
+                        do {
+                            let wAmount = Int(wager) ?? 10
+                            let hours = durationHoursMap[min(max(selectedDurationIndex, 0), durationHoursMap.count - 1)]
+                            _ = try await ChallengeService.createChallenge(opponentUsername: opponent, wager: wAmount, durationHours: hours)
+                            activeChallenges = await ChallengeService.fetchActiveChallenges()
+                            opponent = ""; wager = ""
+                            showCreateSheet = false
+                        } catch {
+                            actionError = error.localizedDescription
+                        }
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "bolt.fill").font(.system(size: 14, weight: .semibold))
@@ -309,7 +363,7 @@ struct ChallengesView: View {
 
 // MARK: - Duration Selector
 private struct DurationSelector: View {
-    @State private var selected = 1
+    @Binding var selectedIndex: Int
     let options = ["6h", "24h", "3d", "7d"]
 
     private let tealStart = Color(red: 0.22, green: 0.68, blue: 0.74)
@@ -318,14 +372,14 @@ private struct DurationSelector: View {
     var body: some View {
         HStack(spacing: 8) {
             ForEach(0..<options.count, id: \.self) { i in
-                Button { withAnimation { selected = i } } label: {
+                Button { withAnimation { selectedIndex = i } } label: {
                     Text(options[i])
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(selected == i ? .white : Color.white.opacity(0.6))
+                        .foregroundColor(selectedIndex == i ? .white : Color.white.opacity(0.6))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(
-                            selected == i
+                            selectedIndex == i
                             ? AnyView(Capsule().fill(LinearGradient(colors: [tealStart, tealEnd], startPoint: .leading, endPoint: .trailing)))
                             : AnyView(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.08)))
                         )

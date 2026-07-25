@@ -20,11 +20,46 @@ private struct ReferenceTheme {
 }
 
 struct WeeklyRecapView: View {
-    @State private var totalSteps    = 51200
-    @State private var strideEarned  = 51
-    @State private var challengesWon = 3
-    @State private var challengesLost = 1
-    @State private var rankChange    = 2  // improved by 2 spots
+    @EnvironmentObject private var stateManager:  AppStateManager
+    @EnvironmentObject private var healthService: HealthKitService
+
+    private var totalSteps: Int {
+        healthService.weeklySteps
+    }
+
+    private var strideEarned: Int {
+        totalSteps / 1000
+    }
+
+    private var dateRangeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        let end = Date()
+        let start = Calendar.current.date(byAdding: .day, value: -6, to: end) ?? end
+        return "\(formatter.string(from: start)) – \(formatter.string(from: end))"
+    }
+
+    private struct DayEntry: Identifiable {
+        let id: Int
+        let day: String
+        let steps: Int
+    }
+
+    private var breakdownData: [DayEntry] {
+        let daily = healthService.dailyStepsPastWeek
+        let cal = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        let today = Date()
+
+        return (0..<7).reversed().enumerated().map { (index, offset) in
+            let date = cal.date(byAdding: .day, value: -offset, to: today) ?? today
+            let dayName = formatter.string(from: date)
+            let arrayIndex = 6 - offset
+            let stepCount = (arrayIndex >= 0 && arrayIndex < daily.count) ? daily[arrayIndex] : 0
+            return DayEntry(id: index, day: dayName, steps: stepCount)
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -61,6 +96,9 @@ struct WeeklyRecapView: View {
                 .padding(.top, 16)
             }
         }
+        .task {
+            await healthService.fetchAllSteps()
+        }
     }
 
     // MARK: Header
@@ -69,7 +107,7 @@ struct WeeklyRecapView: View {
             Text("Weekly Recap")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(ReferenceTheme.textPrimary)
-            Text("Jul 14 – Jul 20")
+            Text(dateRangeString)
                 .font(.system(size: 14))
                 .foregroundColor(ReferenceTheme.textMuted)
         }
@@ -82,10 +120,10 @@ struct WeeklyRecapView: View {
             // Teal Gradient banner strip
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Great week!")
+                    Text(totalSteps > 0 ? "Great week!" : "Keep stepping!")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.white)
-                    Text("You walked \(totalSteps.formatted()) steps and climbed \(rankChange) spots in your league.")
+                    Text("You walked \(totalSteps.formatted()) steps this week.")
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(3)
@@ -109,7 +147,7 @@ struct WeeklyRecapView: View {
                 Divider().background(Color.white.opacity(0.12))
                 miniStat(value: "₿ \(strideEarned)", label: "Earned", icon: "wallet.pass.fill", color: Color(red: 1.0, green: 0.65, blue: 0.3))
                 Divider().background(Color.white.opacity(0.12))
-                miniStat(value: "\(challengesWon)W/\(challengesLost)L", label: "Battles", icon: "bolt.fill", color: SD.success)
+                miniStat(value: "0W/0L", label: "Battles", icon: "bolt.fill", color: SD.success)
             }
             .padding(.vertical, 8)
             .background(
@@ -159,23 +197,6 @@ struct WeeklyRecapView: View {
         .padding(.vertical, 8)
     }
 
-    // MARK: Breakdown
-    private struct DayEntry: Identifiable {
-        let id: String
-        let day: String
-        let steps: Int
-    }
-
-    private var breakdownData: [DayEntry] {
-        [
-            DayEntry(id: "mon", day: "Monday",    steps: 6200),
-            DayEntry(id: "tue", day: "Tuesday",   steps: 9100),
-            DayEntry(id: "wed", day: "Wednesday", steps: 7400),
-            DayEntry(id: "thu", day: "Thursday",  steps: 10200),
-            DayEntry(id: "fri", day: "Friday",    steps: 8450),
-        ]
-    }
-
     private var breakdownSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("DAY BREAKDOWN")
@@ -193,7 +214,7 @@ struct WeeklyRecapView: View {
                         // Mini progress
                         RoundedRectangle(cornerRadius: 3)
                             .fill(entry.steps >= 10000 ? AnyShapeStyle(ReferenceTheme.tealGradient) : AnyShapeStyle(ReferenceTheme.tealStart.opacity(0.4)))
-                            .frame(width: CGFloat(entry.steps) / 500, height: 6)
+                            .frame(width: max(CGFloat(entry.steps) / 500, 2), height: 6)
                         Text("\(entry.steps.formatted())")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(entry.steps >= 10000 ? ReferenceTheme.tealStart : ReferenceTheme.textMuted)
@@ -202,7 +223,7 @@ struct WeeklyRecapView: View {
                     .padding(.vertical, 12)
                     .padding(.horizontal, 14)
 
-                    if entry.id != "fri" {
+                    if entry.id != breakdownData.last?.id {
                         Divider()
                             .background(Color.white.opacity(0.1))
                             .padding(.horizontal, 12)

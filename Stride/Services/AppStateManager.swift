@@ -132,12 +132,33 @@ final class AppStateManager: ObservableObject {
             withAnimation(.easeInOut(duration: SD.animNormal)) {
                 rootState = .signedIn
             }
-        } else {
-            // No profile found → new user or profile save failed previously,
-            // send them through onboarding to pick a username.
-            UserDefaults.standard.set(false, forKey: isOnboardingCompletedKey)
+        } else if let session = try? await supabase.auth.session {
+            // User signed in but no profile exists in Supabase.
+            // Automatically ensure a profile in Supabase so they are NEVER asked for username/displayName on Sign In.
+            let fallbackName = fallbackUsername(for: session.user.email ?? "user", userId: session.user.id)
+            let created = try? await ProfileService.createProfile(username: fallbackName, displayName: nil)
+            let usernameToUse = created?.username ?? fallbackName
+            let displayNameToUse = created?.displayName
+
+            UserDefaults.standard.set(true,           forKey: isOnboardingCompletedKey)
+            UserDefaults.standard.set(usernameToUse, forKey: savedUsernameKey)
+            if let dn = displayNameToUse {
+                UserDefaults.standard.set(dn, forKey: savedDisplayNameKey)
+            }
+
+            self.currentUser = User(
+                id: session.user.id,
+                username: usernameToUse,
+                displayName: displayNameToUse,
+                avatarUrl: created?.avatarUrl,
+                strideBalance: created?.strideBalance ?? 100,
+                allTimeSteps: created?.allTimeSteps ?? 0,
+                onboardingComplete: true,
+                createdAt: created?.createdAt ?? Date()
+            )
+
             withAnimation(.easeInOut(duration: SD.animNormal)) {
-                rootState = .onboardingRequired
+                rootState = .signedIn
             }
         }
     }
@@ -147,7 +168,7 @@ final class AppStateManager: ObservableObject {
     // MARK: - Onboarding Completion
     //
     // Called from the Health card after the user picks a username and grants
-    // HealthKit permission. This is the moment we:
+    // HealthKit permission on SIGN UP. This is the moment we:
     //   1. Write the profile row to Supabase (username, display name, balance…)
     //   2. Cache the profile locally in UserDefaults for fast cold-launch restores
     //   3. Populate currentUser so every view in the app has a User object
@@ -159,9 +180,6 @@ final class AppStateManager: ObservableObject {
         let cleanDisplayName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalDisplayName = (cleanDisplayName?.isEmpty == false) ? cleanDisplayName : nil
 
-        // 1. Try to write to the Supabase `profiles` table.
-        //    If it fails (table not created yet, RLS error, network issue)
-        //    we still complete onboarding locally so the user isn't stuck.
         var resolvedId: UUID = UUID()
         var resolvedBalance: Int = 100
         var resolvedSteps: Int = 0
@@ -177,25 +195,20 @@ final class AppStateManager: ObservableObject {
             resolvedSteps      = savedProfile.allTimeSteps
             resolvedCreatedAt  = savedProfile.createdAt ?? Date()
         } catch {
-            // Supabase insert failed — log it but don't throw.
-            // The user will still reach the main app. On the next sign-in,
-            // AppStateManager can attempt to re-create the profile row.
-            print("[Stride] Profile save failed (will use local data): \(error.localizedDescription)")
-
-            // Try to pull the real auth UUID so at least the ID is correct.
+            print("[Stride] Profile save failed (will fallback to local cache): \(error.localizedDescription)")
             if let session = try? await supabase.auth.session {
                 resolvedId = session.user.id
             }
         }
 
-        // 2. Cache profile locally so cold launches don't need a DB round-trip.
+        // Cache profile locally so cold launches don't need a DB round-trip.
         UserDefaults.standard.set(true,          forKey: isOnboardingCompletedKey)
         UserDefaults.standard.set(finalUsername, forKey: savedUsernameKey)
         if let dn = finalDisplayName {
             UserDefaults.standard.set(dn, forKey: savedDisplayNameKey)
         }
 
-        // 3. Hydrate the in-memory User object.
+        // Hydrate in-memory User object.
         self.currentUser = User(
             id: resolvedId,
             username: finalUsername,
@@ -207,7 +220,6 @@ final class AppStateManager: ObservableObject {
             createdAt: resolvedCreatedAt
         )
 
-        // 4. Always transition to the main app — no matter what happened above.
         withAnimation(.easeInOut(duration: SD.animNormal)) {
             rootState = .signedIn
         }
@@ -225,9 +237,6 @@ final class AppStateManager: ObservableObject {
         try? await supabase.auth.signOut()
 
         // Clear the in-memory user and cached profile strings.
-        // NOTE: we intentionally do NOT clear isOnboardingCompletedKey here.
-        // signIn() now checks the live Supabase profile instead, so the local
-        // flag is only used as a fast-path hint on cold launch.
         UserDefaults.standard.removeObject(forKey: savedUsernameKey)
         UserDefaults.standard.removeObject(forKey: savedDisplayNameKey)
         self.currentUser = nil
@@ -242,16 +251,17 @@ final class AppStateManager: ObservableObject {
     // MARK: - Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Rebuilds the `currentUser` from locally persisted profile data and
-    /// transitions the root state to `.signedIn` or `.onboardingRequired`.
+    /// Rebuilds the `currentUser` from locally persisted profile data or Supabase,
+    /// transitioning the root state to `.signedIn`.
     private func restoreUserFromDefaults() async {
         let onboardingDone   = UserDefaults.standard.bool(forKey: isOnboardingCompletedKey)
         let savedUsername    = UserDefaults.standard.string(forKey: savedUsernameKey) ?? "strider"
         let savedDisplayName = UserDefaults.standard.string(forKey: savedDisplayNameKey)
 
         if onboardingDone {
+            let session = try? await supabase.auth.session
             self.currentUser = User(
-                id: UUID(),
+                id: session?.user.id ?? UUID(),
                 username: savedUsername,
                 displayName: savedDisplayName,
                 avatarUrl: nil,
@@ -263,10 +273,45 @@ final class AppStateManager: ObservableObject {
             withAnimation(.easeInOut(duration: SD.animNormal)) {
                 rootState = .signedIn
             }
+        } else if let session = try? await supabase.auth.session {
+            // Valid session exists on cold launch. Ensure fallback profile and proceed to app.
+            let fallbackName = fallbackUsername(for: session.user.email ?? "user", userId: session.user.id)
+            let created = try? await ProfileService.createProfile(username: fallbackName, displayName: nil)
+            let usernameToUse = created?.username ?? fallbackName
+
+            UserDefaults.standard.set(true,          forKey: isOnboardingCompletedKey)
+            UserDefaults.standard.set(usernameToUse, forKey: savedUsernameKey)
+
+            self.currentUser = User(
+                id: session.user.id,
+                username: usernameToUse,
+                displayName: created?.displayName,
+                avatarUrl: created?.avatarUrl,
+                strideBalance: created?.strideBalance ?? 100,
+                allTimeSteps: created?.allTimeSteps ?? 0,
+                onboardingComplete: true,
+                createdAt: created?.createdAt ?? Date()
+            )
+            withAnimation(.easeInOut(duration: SD.animNormal)) {
+                rootState = .signedIn
+            }
         } else {
             withAnimation(.easeInOut(duration: SD.animNormal)) {
-                rootState = .onboardingRequired
+                rootState = .signedOut
             }
         }
+    }
+
+    /// Derives a clean fallback username from user email address.
+    private func fallbackUsername(for email: String, userId: UUID) -> String {
+        let prefix = email.components(separatedBy: "@").first?.lowercased() ?? "strider"
+        let allowed = CharacterSet.lowercaseLetters.union(.decimalDigits).union(CharacterSet(charactersIn: "_"))
+        var clean = String(prefix.unicodeScalars.filter { allowed.contains($0) })
+        if clean.count < 3 {
+            clean = "strider_\(userId.uuidString.prefix(4).lowercased())"
+        } else if clean.count > 20 {
+            clean = String(clean.prefix(20))
+        }
+        return clean
     }
 }

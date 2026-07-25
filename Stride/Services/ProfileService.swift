@@ -159,12 +159,12 @@ struct ProfileService {
             createdAt: nil        // Postgres fills this in automatically
         )
 
-        // 3. INSERT INTO profiles VALUES (row)
+        // 3. UPSERT INTO profiles VALUES (row)
         // .execute().value decodes the returned row (Postgres RETURNING *).
         do {
             let saved: ProfileRow = try await supabase
                 .from("profiles")
-                .insert(row)
+                .upsert(row)
                 .select()
                 .single()
                 .execute()
@@ -189,7 +189,7 @@ struct ProfileService {
         let rows: [ProfileRow] = try await supabase
             .from("profiles")
             .select()
-            .eq("id", value: userId.uuidString)
+            .eq("id", value: userId.uuidString.lowercased())
             .limit(1)
             .execute()
             .value

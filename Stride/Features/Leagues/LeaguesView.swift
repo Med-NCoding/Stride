@@ -20,30 +20,18 @@ private struct ReferenceTheme {
 }
 
 struct LeaguesView: View {
+    @EnvironmentObject private var stateManager:  AppStateManager
+    @EnvironmentObject private var healthService: HealthKitService
+
     @State private var selectedLeaderboard = 0 // 0 = GOAT steps, 1 = Tycoon wealth
-    @State private var showCreateSheet = false
-    @State private var showJoinSheet   = false
-    @State private var leagueName      = ""
-    @State private var inviteCode      = ""
+    @State private var showCreateSheet     = false
+    @State private var showJoinSheet       = false
+    @State private var leagueName          = ""
+    @State private var inviteCode          = ""
 
-    // Mock data
-    let leagues = ["Neighborhood Walkers", "Silicon Valley Runners"]
-
-    let goatData: [(String, Int, Bool)] = [
-        ("Alice",    92400, false),
-        ("You",      84000, true),
-        ("Charlie",  71500, false),
-        ("Daniel",   58200, false),
-        ("Emma",     49100, false),
-    ]
-
-    let tycoonData: [(String, Int, Bool)] = [
-        ("Charlie",  840, false),
-        ("You",      420, true),
-        ("Alice",    380, false),
-        ("Emma",     210, false),
-        ("Daniel",   95,  false),
-    ]
+    @State private var userLeagues: [League] = []
+    @State private var isLoadingLeagues    = false
+    @State private var actionError: String? = nil
 
     var body: some View {
         ZStack {
@@ -80,8 +68,17 @@ struct LeaguesView: View {
                 .padding(.top, 16)
             }
         }
+        .task {
+            await loadLeagues()
+        }
         .sheet(isPresented: $showCreateSheet) { createSheet }
         .sheet(isPresented: $showJoinSheet)   { joinSheet }
+    }
+
+    private func loadLeagues() async {
+        isLoadingLeagues = true
+        userLeagues = await LeagueService.fetchUserLeagues()
+        isLoadingLeagues = false
     }
 
     // MARK: Header
@@ -97,7 +94,7 @@ struct LeaguesView: View {
             }
             Spacer()
             HStack(spacing: 12) {
-                Button { showJoinSheet = true } label: {
+                Button { actionError = nil; showJoinSheet = true } label: {
                     Image(systemName: "qrcode.viewfinder")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(ReferenceTheme.textPrimary)
@@ -109,7 +106,7 @@ struct LeaguesView: View {
                                 .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
                         )
                 }
-                Button { showCreateSheet = true } label: {
+                Button { actionError = nil; showCreateSheet = true } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
@@ -129,37 +126,105 @@ struct LeaguesView: View {
                 .foregroundColor(ReferenceTheme.textMuted)
                 .tracking(0.8)
 
-            VStack(spacing: 8) {
-                ForEach(leagues, id: \.self) { name in
-                    HStack(spacing: 12) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(ReferenceTheme.tealStart.opacity(0.2))
-                                .frame(width: 40, height: 40)
-                            Image(systemName: "person.3.fill")
-                                .font(.system(size: 15))
-                                .foregroundColor(ReferenceTheme.tealStart)
+            if userLeagues.isEmpty {
+                emptyLeaguesCard
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(userLeagues) { league in
+                        HStack(spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(ReferenceTheme.tealStart.opacity(0.2))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: "person.3.fill")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(ReferenceTheme.tealStart)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(league.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(ReferenceTheme.textPrimary)
+                                Text("Code: \(league.inviteCode)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(ReferenceTheme.textMuted)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12))
+                                .foregroundColor(ReferenceTheme.textMuted)
                         }
-                        Text(name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(ReferenceTheme.textPrimary)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12))
-                            .foregroundColor(ReferenceTheme.textMuted)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(ReferenceTheme.glassCardBg)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                                )
+                        )
                     }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(ReferenceTheme.glassCardBg)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
-                            )
-                    )
                 }
             }
         }
+    }
+
+    private var emptyLeaguesCard: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(ReferenceTheme.tealStart.opacity(0.15))
+                    .frame(width: 54, height: 54)
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(ReferenceTheme.tealStart)
+            }
+
+            VStack(spacing: 4) {
+                Text("No Leagues Joined Yet")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(ReferenceTheme.textPrimary)
+                Text("Create a league or join with an invite code to start competing with friends.")
+                    .font(.system(size: 13))
+                    .foregroundColor(ReferenceTheme.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    actionError = nil
+                    showCreateSheet = true
+                } label: {
+                    Text("Create League")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(ReferenceTheme.tealGradient))
+                }
+
+                Button {
+                    actionError = nil
+                    showJoinSheet = true
+                } label: {
+                    Text("Join with Code")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(ReferenceTheme.textPrimary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.white.opacity(0.10)))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(ReferenceTheme.glassCardBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                )
+        )
     }
 
     // MARK: Leaderboard Section
@@ -179,24 +244,30 @@ struct LeaguesView: View {
             .background(Color.black.opacity(0.3))
             .cornerRadius(16)
 
-            // Rows
-            let data = selectedLeaderboard == 0 ? goatData : tycoonData
             VStack(spacing: 0) {
-                ForEach(0..<data.count, id: \.self) { i in
-                    let entry = data[i]
-                    customRankRow(
-                        rank: i + 1,
-                        name: entry.0,
-                        value: selectedLeaderboard == 0
-                            ? "\(entry.1.formatted()) steps"
-                            : "₿ \(entry.1.formatted())",
-                        isCurrentUser: entry.2
-                    )
-                    if i < data.count - 1 {
-                        Divider()
-                            .background(Color.white.opacity(0.1))
-                            .padding(.horizontal, 12)
+                if userLeagues.isEmpty {
+                    VStack(spacing: 8) {
+                        Text("No League Activity")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(ReferenceTheme.textPrimary)
+                        Text("Join or create a league to view live leaderboard rankings.")
+                            .font(.system(size: 12))
+                            .foregroundColor(ReferenceTheme.textMuted)
+                            .multilineTextAlignment(.center)
                     }
+                    .padding(24)
+                    .frame(maxWidth: .infinity)
+                } else {
+                    let userName = stateManager.currentUser?.displayName ?? stateManager.currentUser?.username ?? "You"
+                    let userSteps = healthService.weeklySteps
+                    let userBalance = stateManager.currentUser?.strideBalance ?? 100
+
+                    customRankRow(
+                        rank: 1,
+                        name: "\(userName) (You)",
+                        value: selectedLeaderboard == 0 ? "\(userSteps.formatted()) steps" : "₿ \(userBalance.formatted())",
+                        isCurrentUser: true
+                    )
                 }
             }
             .background(
@@ -230,7 +301,6 @@ struct LeaguesView: View {
 
     private func customRankRow(rank: Int, name: String, value: String, isCurrentUser: Bool) -> some View {
         HStack(spacing: 12) {
-            // Rank badge
             ZStack {
                 Circle()
                     .fill(isCurrentUser ? ReferenceTheme.tealStart.opacity(0.25) : Color.white.opacity(0.08))
@@ -240,7 +310,6 @@ struct LeaguesView: View {
                     .foregroundColor(isCurrentUser ? ReferenceTheme.tealStart : ReferenceTheme.textMuted)
             }
 
-            // Avatar
             Circle()
                 .fill(Color.white.opacity(0.1))
                 .frame(width: 34, height: 34)
@@ -278,9 +347,22 @@ struct LeaguesView: View {
         SheetContainer(title: "Create League", isPresented: $showCreateSheet) {
             VStack(spacing: 16) {
                 StrideTextField(placeholder: "League name", text: $leagueName)
+
+                if let err = actionError {
+                    Text(err).font(.system(size: 12)).foregroundColor(SD.danger)
+                }
+
                 Button {
-                    leagueName = ""
-                    showCreateSheet = false
+                    Task {
+                        do {
+                            _ = try await LeagueService.createLeague(name: leagueName)
+                            userLeagues = await LeagueService.fetchUserLeagues()
+                            leagueName = ""
+                            showCreateSheet = false
+                        } catch {
+                            actionError = error.localizedDescription
+                        }
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
@@ -299,9 +381,22 @@ struct LeaguesView: View {
         SheetContainer(title: "Join with Code", isPresented: $showJoinSheet) {
             VStack(spacing: 16) {
                 StrideTextField(placeholder: "Invite code", text: $inviteCode)
+
+                if let err = actionError {
+                    Text(err).font(.system(size: 12)).foregroundColor(SD.danger)
+                }
+
                 Button {
-                    inviteCode = ""
-                    showJoinSheet = false
+                    Task {
+                        do {
+                            _ = try await LeagueService.joinLeague(code: inviteCode)
+                            userLeagues = await LeagueService.fetchUserLeagues()
+                            inviteCode = ""
+                            showJoinSheet = false
+                        } catch {
+                            actionError = error.localizedDescription
+                        }
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.right").font(.system(size: 14, weight: .semibold))
