@@ -28,7 +28,8 @@ struct ChallengesView: View {
     @State private var wager           = ""
     @State private var selectedDurationIndex = 1
 
-    @State private var activeChallenges: [Challenge] = []
+    @State private var pendingChallenges: [Challenge] = []
+    @State private var activeChallenges:  [Challenge] = []
     @State private var actionError: String? = nil
 
     private let durationHoursMap = [6, 24, 72, 168]
@@ -60,6 +61,11 @@ struct ChallengesView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     headerSection
+
+                    if !pendingChallenges.isEmpty {
+                        pendingInvitesSection
+                    }
+
                     activeChallengesSection
                     historySection
                     Spacer(minLength: 100)
@@ -75,7 +81,9 @@ struct ChallengesView: View {
     }
 
     private func loadChallenges() async {
-        activeChallenges = await ChallengeService.fetchActiveChallenges()
+        let (pending, active) = await ChallengeService.fetchUserChallenges()
+        pendingChallenges = pending
+        activeChallenges = active
     }
 
     // MARK: Header
@@ -104,6 +112,102 @@ struct ChallengesView: View {
                 .shadow(color: ReferenceTheme.tealStart.opacity(0.4), radius: 6, x: 0, y: 3)
             }
         }
+    }
+
+    // MARK: Pending Invites Section
+    private var pendingInvitesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("PENDING WAGER REQUESTS")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(ReferenceTheme.textMuted)
+                .tracking(0.8)
+
+            VStack(spacing: 12) {
+                ForEach(pendingChallenges) { item in
+                    pendingInviteCard(challenge: item)
+                }
+            }
+        }
+    }
+
+    private func pendingInviteCard(challenge: Challenge) -> some View {
+        let currentUserId = stateManager.currentUser?.id
+        let isSender = challenge.challengerId == currentUserId
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isSender ? "Wager Request Sent" : "Wager Request Received")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(ReferenceTheme.textPrimary)
+                    Text(isSender ? "Waiting for opponent to accept..." : "Wager: ₿ \(challenge.challengerWager)")
+                        .font(.system(size: 12))
+                        .foregroundColor(ReferenceTheme.textMuted)
+                }
+                Spacer()
+                Text("₿ \(challenge.challengerWager)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(ReferenceTheme.tealGradient))
+            }
+
+            HStack(spacing: 12) {
+                if !isSender {
+                    Button {
+                        Task {
+                            try? await ChallengeService.acceptChallenge(id: challenge.id)
+                            await loadChallenges()
+                        }
+                    } label: {
+                        Text("Accept Wager")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(ReferenceTheme.tealGradient))
+                    }
+
+                    Button {
+                        Task {
+                            try? await ChallengeService.declineChallenge(id: challenge.id)
+                            await loadChallenges()
+                        }
+                    } label: {
+                        Text("Decline")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(ReferenceTheme.textMuted)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color.white.opacity(0.1)))
+                    }
+                } else {
+                    Button {
+                        Task {
+                            try? await ChallengeService.declineChallenge(id: challenge.id)
+                            await loadChallenges()
+                        }
+                    } label: {
+                        Text("Cancel Request")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(ReferenceTheme.textMuted)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.white.opacity(0.08)))
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(ReferenceTheme.glassCardBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                )
+        )
     }
 
     // MARK: Active Challenges
@@ -339,7 +443,7 @@ struct ChallengesView: View {
                             let wAmount = Int(wager) ?? 10
                             let hours = durationHoursMap[min(max(selectedDurationIndex, 0), durationHoursMap.count - 1)]
                             _ = try await ChallengeService.createChallenge(opponentUsername: opponent, wager: wAmount, durationHours: hours)
-                            activeChallenges = await ChallengeService.fetchActiveChallenges()
+                            await loadChallenges()
                             opponent = ""; wager = ""
                             showCreateSheet = false
                         } catch {
