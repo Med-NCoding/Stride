@@ -1,4 +1,5 @@
 import SwiftUI
+import Contacts
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Reference Photo Theme Palette & Components
@@ -19,12 +20,15 @@ private struct ReferenceTheme {
 
 struct IntroWelcomeView: View {
     @State private var hasEntered = false
+    @State private var contactImages: [UIImage] = []
+    @State private var contactInitials: [String] = []
 
-    // Orbiting user avatar mock data
+    // Orbiting user avatar mock data for fallback
+    private let fallbackInitials = ["JD", "AS", "MK", "SL", "RL", "TW", "EM", "DB", "CM", "AB", "KP"]
     private let avatarIcons = [
-        "figure.walk", "person.fill", "flame.fill", "trophy.fill",
+        "person.fill", "figure.walk", "flame.fill", "trophy.fill",
         "bolt.fill", "heart.fill", "star.fill", "crown.fill",
-        "figure.run", "waveform.path.ecg"
+        "figure.run", "waveform.path.ecg", "sparkles"
     ]
 
     var body: some View {
@@ -37,6 +41,9 @@ struct IntroWelcomeView: View {
         } else {
             welcomeScreen
                 .transition(.opacity)
+                .onAppear {
+                    fetchUserContacts()
+                }
         }
     }
 
@@ -67,22 +74,22 @@ struct IntroWelcomeView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // ── Orbiting Contact / Friends Wheel (matching reference image) ──
+                // ── Orbiting Contact / Friends Wheel (Matching Reference Photo) ──
                 ZStack {
-                    // Outer dark orbital ring track
+                    // Outer dark orbital track ring
                     Circle()
-                        .stroke(Color.black.opacity(0.25), lineWidth: 48)
-                        .frame(width: 250, height: 250)
+                        .stroke(Color.black.opacity(0.30), lineWidth: 50)
+                        .frame(width: 260, height: 260)
 
-                    // Inner dark orbital ring track
+                    // Inner dark orbital track ring
                     Circle()
-                        .stroke(Color.black.opacity(0.40), lineWidth: 32)
+                        .stroke(Color.black.opacity(0.45), lineWidth: 36)
                         .frame(width: 170, height: 170)
 
                     // Central white logo card badge
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .fill(Color.white)
-                        .frame(width: 80, height: 80)
+                        .frame(width: 84, height: 84)
                         .shadow(color: Color.black.opacity(0.25), radius: 15, x: 0, y: 8)
                         .overlay(
                             VStack(spacing: 2) {
@@ -95,39 +102,76 @@ struct IntroWelcomeView: View {
                             }
                         )
 
-                    // Orbiting small circles around the wheel
-                    ForEach(0..<10, id: \.self) { index in
-                        let angle = Double(index) * (360.0 / 10.0) * .pi / 180.0
-                        let radius: CGFloat = 115
+                    // Staggered contacts orbiting across inner and outer circular tracks
+                    ForEach(0..<11, id: \.self) { index in
+                        let isOuter = (index % 2 == 0)
+                        let radius: CGFloat = isOuter ? 128 : 86
+                        let angle = (Double(index) * (360.0 / 11.0) - 90.0) * .pi / 180.0
                         let x = cos(angle) * radius
                         let y = sin(angle) * radius
+                        let size: CGFloat = isOuter ? 40 : 34
+                        let isRoundedSquare = (index % 3 == 0)
 
                         ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: index % 2 == 0
-                                        ? [ReferenceTheme.tealStart, ReferenceTheme.tealEnd]
-                                        : [Color(red: 1.0, green: 0.6, blue: 0.3), Color(red: 0.9, green: 0.4, blue: 0.2)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                            if index < contactImages.count {
+                                Image(uiImage: contactImages[index])
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: size, height: size)
+                                    .clipShape(RoundedRectangle(cornerRadius: isRoundedSquare ? 12 : size / 2, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: isRoundedSquare ? 12 : size / 2, style: .continuous)
+                                            .strokeBorder(Color.white.opacity(0.3), lineWidth: 1)
                                     )
-                                )
-                                .frame(width: 36, height: 36)
-                                .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+                                    .shadow(color: Color.black.opacity(0.35), radius: 4, x: 0, y: 2)
+                            } else {
+                                Group {
+                                    if isRoundedSquare {
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: index % 2 == 0
+                                                    ? [ReferenceTheme.tealStart, ReferenceTheme.tealEnd]
+                                                    : [Color(red: 0.95, green: 0.55, blue: 0.35), Color(red: 0.85, green: 0.40, blue: 0.25)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                    } else {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: index % 2 == 0
+                                                    ? [Color(red: 0.28, green: 0.38, blue: 0.45), Color(red: 0.16, green: 0.22, blue: 0.28)]
+                                                    : [ReferenceTheme.tealStart, ReferenceTheme.tealEnd],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                    }
+                                }
+                                .frame(width: size, height: size)
+                                .shadow(color: Color.black.opacity(0.35), radius: 4, x: 0, y: 2)
 
-                            Image(systemName: avatarIcons[index % avatarIcons.count])
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(.white)
+                                if index < contactInitials.count {
+                                    Text(contactInitials[index])
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(.white)
+                                } else {
+                                    Image(systemName: avatarIcons[index % avatarIcons.count])
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                            }
                         }
                         .offset(x: x, y: y)
                     }
                 }
-                .padding(.top, 40)
+                .padding(.top, 30)
 
                 Spacer()
 
-                // ── Headline & Simple Non-AI Subtitle Text ─────────────────
+                // ── Headline & Simple Subtitle Text ─────────────────────────
                 VStack(spacing: 12) {
                     Text("Welcome to Stride")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -141,7 +185,7 @@ struct IntroWelcomeView: View {
                 }
                 .padding(.bottom, 36)
 
-                // ── "Enter" Pill Button (matching reference layout) ────────
+                // ── "Enter" Pill Button (Matching reference layout) ────────
                 Button {
                     withAnimation(.easeInOut(duration: 0.35)) {
                         hasEntered = true
@@ -160,6 +204,43 @@ struct IntroWelcomeView: View {
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 48)
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MARK: - Contacts Integration
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private func fetchUserContacts() {
+        let store = CNContactStore()
+        store.requestAccess(for: .contacts) { granted, _ in
+            guard granted else { return }
+            let keys = [
+                CNContactImageDataKey as CNKeyDescriptor,
+                CNContactGivenNameKey as CNKeyDescriptor,
+                CNContactFamilyNameKey as CNKeyDescriptor
+            ]
+            let request = CNContactFetchRequest(keysToFetch: keys)
+            var fetchedImages: [UIImage] = []
+            var fetchedInitials: [String] = []
+
+            try? store.enumerateContacts(with: request) { contact, _ in
+                if let data = contact.imageData, let img = UIImage(data: data) {
+                    fetchedImages.append(img)
+                } else {
+                    let first = contact.givenName.prefix(1)
+                    let last = contact.familyName.prefix(1)
+                    let initials = "\(first)\(last)".uppercased()
+                    if !initials.isEmpty {
+                        fetchedInitials.append(initials)
+                    }
+                }
+            }
+
+            DispatchQueue.main.async {
+                self.contactImages = fetchedImages
+                self.contactInitials = fetchedInitials
             }
         }
     }
