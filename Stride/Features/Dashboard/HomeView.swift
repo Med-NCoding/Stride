@@ -4,17 +4,17 @@ import SwiftUI
 // MARK: - Reference Photo Theme Palette & Components
 // ─────────────────────────────────────────────────────────────────────────────
 private struct ReferenceTheme {
-    static let bgTop = Color(red: 0.26, green: 0.34, blue: 0.38)
-    static let bgBottom = Color(red: 0.12, green: 0.16, blue: 0.20)
-    static let tealStart = Color(red: 0.22, green: 0.68, blue: 0.74)
-    static let tealEnd = Color(red: 0.12, green: 0.48, blue: 0.55)
+    static let bgTop = Color(red: 0.10, green: 0.12, blue: 0.15)
+    static let bgBottom = Color(red: 0.05, green: 0.06, blue: 0.08)
+    static let tealStart = Color(red: 0.00, green: 0.72, blue: 0.83)
+    static let tealEnd = Color(red: 0.00, green: 0.48, blue: 0.58)
     static let tealGradient = LinearGradient(
         colors: [tealStart, tealEnd],
         startPoint: .leading,
         endPoint: .trailing
     )
-    static let glassCardBg = Color.black.opacity(0.32)
-    static let glassBorder = Color.white.opacity(0.18)
+    static let glassCardBg = Color.black.opacity(0.45)
+    static let glassBorder = Color.white.opacity(0.14)
     static let textPrimary = Color.white
     static let textMuted = Color.white.opacity(0.65)
 }
@@ -60,16 +60,16 @@ struct HomeView: View {
             )
             .ignoresSafeArea()
 
-            // Ambient warm glow bokeh (top-right light flare)
+            // Subtle warm glow bokeh
             Circle()
-                .fill(Color(red: 1.0, green: 0.62, blue: 0.30).opacity(0.35))
+                .fill(Color(red: 1.0, green: 0.62, blue: 0.30).opacity(0.10))
                 .frame(width: 240, height: 240)
                 .blur(radius: 50)
                 .offset(x: 110, y: -100)
 
             // Secondary cool teal glow
             Circle()
-                .fill(ReferenceTheme.tealStart.opacity(0.20))
+                .fill(ReferenceTheme.tealStart.opacity(0.08))
                 .frame(width: 300, height: 300)
                 .blur(radius: 60)
                 .offset(x: -120, y: 180)
@@ -101,7 +101,7 @@ struct HomeView: View {
                 Text("Good morning,")
                     .font(.system(size: 14))
                     .foregroundColor(ReferenceTheme.textMuted)
-                Text("\(stateManager.currentUser?.displayName ?? stateManager.currentUser?.username ?? "strider") 👋")
+                Text("\(stateManager.currentUser?.displayName ?? stateManager.currentUser?.username ?? "strider")")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(ReferenceTheme.textPrimary)
             }

@@ -19,17 +19,17 @@ enum UsernameState {
 // MARK: - Reference Photo Design Palette & Components
 // ─────────────────────────────────────────────────────────────────────────────
 private struct ReferenceTheme {
-    static let bgTop = Color(red: 0.26, green: 0.34, blue: 0.38)
-    static let bgBottom = Color(red: 0.12, green: 0.16, blue: 0.20)
-    static let tealStart = Color(red: 0.22, green: 0.68, blue: 0.74)
-    static let tealEnd = Color(red: 0.12, green: 0.48, blue: 0.55)
+    static let bgTop = Color(red: 0.10, green: 0.12, blue: 0.15)
+    static let bgBottom = Color(red: 0.05, green: 0.06, blue: 0.08)
+    static let tealStart = Color(red: 0.00, green: 0.72, blue: 0.83)
+    static let tealEnd = Color(red: 0.00, green: 0.48, blue: 0.58)
     static let tealGradient = LinearGradient(
         colors: [tealStart, tealEnd],
         startPoint: .leading,
         endPoint: .trailing
     )
-    static let glassCardBg = Color.black.opacity(0.32)
-    static let glassBorder = Color.white.opacity(0.18)
+    static let glassCardBg = Color.black.opacity(0.45)
+    static let glassBorder = Color.white.opacity(0.14)
     static let textPrimary = Color.white
     static let textMuted = Color.white.opacity(0.65)
 }
