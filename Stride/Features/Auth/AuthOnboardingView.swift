@@ -543,7 +543,7 @@ struct AuthOnboardingView: View {
         switch stateManager.rootState {
         case .signedOut:
             return isSignUp
-                ? "Walk to earn virtual currency.\nCompete with friends."
+                ? "Compete with friends and place bets on who walks the most."
                 : "Welcome back. Sign in to continue."
         case .onboardingRequired:
             return internalStep == 0 ? "Choose your username." : "Connect Apple Health to track your steps."

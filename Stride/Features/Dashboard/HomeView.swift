@@ -98,7 +98,7 @@ struct HomeView: View {
     private var headerSection: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Good morning,")
+                Text("Welcome,")
                     .font(.system(size: 14))
                     .foregroundColor(ReferenceTheme.textMuted)
                 Text("\(stateManager.currentUser?.displayName ?? stateManager.currentUser?.username ?? "strider")")
@@ -107,21 +107,27 @@ struct HomeView: View {
             }
             Spacer()
             
-            // Avatar (Tap to sign out)
+            // Sign Out / Exit Button
             Button {
                 Task { await stateManager.signOut() }
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(ReferenceTheme.tealStart.opacity(0.2))
-                        .frame(width: 48, height: 48)
-                    Circle()
-                        .strokeBorder(ReferenceTheme.tealStart.opacity(0.6), lineWidth: 1.5)
-                        .frame(width: 48, height: 48)
-                    Text(String(stateManager.currentUser?.username.prefix(1) ?? "S").uppercased())
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(ReferenceTheme.tealStart)
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Sign Out")
+                        .font(.system(size: 13, weight: .semibold))
                 }
+                .foregroundColor(ReferenceTheme.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(ReferenceTheme.glassCardBg)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(ReferenceTheme.glassBorder, lineWidth: 1)
+                        )
+                )
             }
             .buttonStyle(.plain)
         }
