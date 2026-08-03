@@ -23,7 +23,7 @@ struct LeaguesView: View {
     @EnvironmentObject private var stateManager:  AppStateManager
     @EnvironmentObject private var healthService: HealthKitService
 
-    @State private var selectedLeaderboard = 0 // 0 = GOAT steps, 1 = Tycoon wealth
+    @State private var selectedLeaderboard = 0 // 0 = Daily steps, 1 = Weekly steps
     @State private var showCreateSheet     = false
     @State private var showJoinSheet       = false
     @State private var leagueName          = ""
@@ -237,8 +237,8 @@ struct LeaguesView: View {
 
             // Toggle
             HStack(spacing: 0) {
-                leaderboardToggle(title: "GOAT Steps", index: 0)
-                leaderboardToggle(title: "Tycoon Wealth", index: 1)
+                leaderboardToggle(title: "Daily", index: 0)
+                leaderboardToggle(title: "Weekly", index: 1)
             }
             .padding(4)
             .background(Color.black.opacity(0.3))
@@ -259,13 +259,12 @@ struct LeaguesView: View {
                     .frame(maxWidth: .infinity)
                 } else {
                     let userName = stateManager.currentUser?.displayName ?? stateManager.currentUser?.username ?? "You"
-                    let userSteps = healthService.weeklySteps
-                    let userBalance = stateManager.currentUser?.strideBalance ?? 100
+                    let userSteps = selectedLeaderboard == 0 ? healthService.todaySteps : healthService.weeklySteps
 
                     customRankRow(
                         rank: 1,
                         name: "\(userName) (You)",
-                        value: selectedLeaderboard == 0 ? "\(userSteps.formatted()) steps" : "₿ \(userBalance.formatted())",
+                        value: "\(userSteps.formatted()) steps",
                         isCurrentUser: true
                     )
                 }
